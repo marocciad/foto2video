@@ -3,3 +3,7 @@ kaggle/worker.py
 __pycache__/
 *.mp4
 .pytest_cache/
+
+# immagini personali dei personaggi (repo pubblico)
+personaggio*.*
+personaggi/
