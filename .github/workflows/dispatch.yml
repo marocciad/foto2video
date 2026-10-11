@@ -1,0 +1,36 @@
+name: foto2video-dispatch
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # ogni 10 minuti (GitHub puo' ritardare di qualche minuto)
+  workflow_dispatch: {}       # avvio manuale dal tab Actions
+
+concurrency:
+  group: foto2video-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Dipendenze
+        run: pip install --quiet kaggle requests
+
+      - name: Prepara il notebook (copia worker.py accanto ai metadati)
+        run: cp worker/worker.py kaggle/worker.py
+
+      - name: Controlla Telegram e, se serve, accendi la GPU
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          ALLOWED_USER_IDS: ${{ secrets.ALLOWED_USER_IDS }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          KERNEL_DIR: kaggle
+        run: python dispatcher/dispatch.py

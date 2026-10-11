@@ -1,0 +1,4 @@
+# Sviluppo locale e test (la GPU non serve; serve ffmpeg nel PATH)
+requests
+pytest
+kaggle

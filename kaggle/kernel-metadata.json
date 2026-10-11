@@ -1,0 +1,16 @@
+{
+  "id": "TUO_USERNAME_KAGGLE/foto2video-worker",
+  "title": "foto2video-worker",
+  "code_file": "worker.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "machine_shape": "NvidiaTeslaT4",
+  "dataset_sources": ["TUO_USERNAME_KAGGLE/foto2video-secrets"],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

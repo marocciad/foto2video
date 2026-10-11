@@ -1,0 +1,5 @@
+secrets.json
+kaggle/worker.py
+__pycache__/
+*.mp4
+.pytest_cache/
