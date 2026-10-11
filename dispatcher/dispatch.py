@@ -87,6 +87,11 @@ def kernel_status(kernel_id: str) -> str:
     return classify_status(p.stdout + p.stderr)
 
 
+def is_audio(update: dict) -> bool:
+    msg = update.get("message") or {}
+    return bool(msg.get("voice") or msg.get("audio"))
+
+
 def decide(updates: list, allowed: set, status: str) -> str:
     """Logica pura, testabile: 'skip' | 'idle' | 'start' | 'reply'."""
     if status in ACTIVE_STATES or status not in STARTABLE_STATES:
@@ -95,6 +100,10 @@ def decide(updates: list, allowed: set, status: str) -> str:
         return "idle"
     if any(is_job(u) and (not allowed or u["message"]["from"]["id"] in allowed) for u in updates):
         return "start"
+    # Vocali dell'utente: restano in coda (servono per la regia con la sua voce).
+    # Rispondere confermerebbe tutti gli update e li cancellerebbe.
+    if any(is_audio(u) and u["message"]["from"]["id"] in allowed for u in updates):
+        return "idle"
     return "reply"
 
 

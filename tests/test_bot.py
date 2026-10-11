@@ -142,6 +142,9 @@ def test_dispatch_decide():
     assert dispatch.decide([photo_update(1)], allowed, "missing") == "start"
     assert dispatch.decide([photo_update(1, user=STRANGER)], allowed, "complete") == "reply"
     assert dispatch.decide([text_update(1, "/help")], allowed, "error") == "reply"
+    voice = {"update_id": 2, "message": {"message_id": 20, "chat": {"id": ME}, "from": {"id": ME},
+                                         "voice": {"file_id": "v", "duration": 5}}}
+    assert dispatch.decide([text_update(1, "/help"), voice], allowed, "complete") == "idle"
 
 
 def test_fallback_kenburns_on_failure(tmp_path):
