@@ -160,6 +160,26 @@ def test_fallback_kenburns_on_failure(tmp_path):
     assert wk.current_job is None
 
 
+def test_fallback_when_model_load_fails(tmp_path):
+    """Errore nel caricamento del modello (es. import di diffusers): errore in chat + Ken Burns."""
+    class BadLoad:
+        name = "wan"
+
+        def load(self, notify):
+            raise RuntimeError("Failed to import diffusers.models.autoencoders.autoencoder_kl_wan")
+
+        def generate(self, *a):
+            raise AssertionError("non deve arrivare qui")
+    img = os.path.join(str(tmp_path), "in.png")
+    make_image(img)
+    tg = FakeTelegram([photo_update(9, caption="test")], img)
+    wk = w.Worker(cfg=cfg(FALLBACK_KENBURNS=True), tg=tg, backend=BadLoad())
+    wk.started = wk.last_activity = 0
+    wk.poll_once(timeout=0)
+    assert len(tg.videos) == 1 and "Ken Burns" in tg.videos[0][3]
+    assert wk.current_job is None
+
+
 def test_abort_startup_consumes_queue(tmp_path):
     img = os.path.join(str(tmp_path), "in.png")
     make_image(img)

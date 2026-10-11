@@ -50,6 +50,8 @@ def main():
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-U",
                     "git+https://github.com/huggingface/diffusers",
                     "transformers", "accelerate", "huggingface_hub", "kaggle"], check=True)
+    # torchao preinstallato troppo vecchio per diffusers main (ImportError su FqnToConfig)
+    subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "-q", "torchao"], check=False)
     import torch
     from diffusers import WanTransformer3DModel
     from huggingface_hub import snapshot_download

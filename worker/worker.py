@@ -455,8 +455,6 @@ class Worker:
             job.chat_id,
             "⏳ In coda" + (f" (posizione {position + 1})" if position else "") + "…",
             reply_to=job.message_id)
-        if hasattr(self.backend, "load"):
-            self.backend.load(lambda t: self.tg.edit(job.chat_id, status_id, t))
 
         stop = threading.Event()
 
@@ -479,6 +477,10 @@ class Worker:
         th = threading.Thread(target=keep_typing, daemon=True)
         th.start()
         try:
+            # Il caricamento sta dentro il try: se fallisce (dipendenze, download)
+            # l'utente riceve l'errore e il fallback, invece di perdere la foto.
+            if hasattr(self.backend, "load"):
+                self.backend.load(lambda t: self.tg.edit(job.chat_id, status_id, t))
             self.tg.edit(job.chat_id, status_id, "🎬 Genero il video… 0%")
             img = self.tg.download(job.file_id, os.path.join(tmpdir, "input.jpg"))
             out = self.backend.generate(img, job, os.path.join(tmpdir, "output.mp4"), progress)
@@ -586,6 +588,9 @@ def ensure_deps(backend: str):
                     "git+https://github.com/huggingface/diffusers",
                     "transformers", "accelerate", "ftfy", "imageio", "imageio-ffmpeg"],
                    check=True)
+    # Il torchao preinstallato su Kaggle e' piu' vecchio di quello che diffusers main
+    # si aspetta (ImportError su FqnToConfig). Non lo usiamo: senza, diffusers lo salta.
+    subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "-q", "torchao"], check=False)
 
 
 def main():
