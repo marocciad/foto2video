@@ -87,6 +87,8 @@ Comandi: `/help`, `/id`.
 | `WAN_DTYPE` | `auto` | su T4 usa fp16; forza `bf16` se l'output esce nero |
 | `WAN_FP8` | `auto` | pesi del transformer in FP8 (solo memoria) quando c'è una sola GPU: ~5 GB invece di ~10 |
 | `FALLBACK_KENBURNS` | `true` | se l'IA fallisce, manda comunque uno zoom Ken Burns |
+| `CHARACTER_PROMPT` | `""` | descrizione fissa del personaggio, aggiunta a ogni didascalia (es. *"his face is covered by a rigid, motionless white mask"*) |
+| `NEGATIVE_EXTRA` | `""` | cose da evitare, aggiunte al prompt negativo (es. *"smiling, mouth moving, mask changing shape"*) |
 
 ## Problemi noti
 

@@ -177,6 +177,7 @@ def test_fallback_when_model_load_fails(tmp_path):
     wk.started = wk.last_activity = 0
     wk.poll_once(timeout=0)
     assert len(tg.videos) == 1 and "Ken Burns" in tg.videos[0][3]
+    assert any(e[0] == "edit" and "Failed to import" in e[2] for e in tg.log)
     assert wk.current_job is None
 
 
@@ -234,6 +235,16 @@ def test_telegram_client_params():
                                           "allowed_updates": ["message"], "offset": 7}, 45)
     method, params, http_timeout = s.calls[1]
     assert params["timeout"] == 0 and params["offset"] == 8 and http_timeout > 0
+
+
+def test_build_prompts():
+    p, n = w.build_prompts("he raises a hand.", {})
+    assert p == "he raises a hand." and n == w.NEGATIVE_PROMPT
+    p, n = w.build_prompts("he raises a hand.", {"CHARACTER_PROMPT": "rigid white mask",
+                                                  "NEGATIVE_EXTRA": "smiling mask"})
+    assert p == "he raises a hand. rigid white mask"
+    assert n.startswith(w.NEGATIVE_PROMPT) and n.endswith(", smiling mask")
+    assert w.build_prompts("", {})[0]  # senza didascalia c'e' comunque un prompt
 
 
 if __name__ == "__main__":

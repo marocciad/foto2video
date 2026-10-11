@@ -45,6 +45,8 @@ DEFAULTS = {
     "WAN_DTYPE": "auto",         # auto | fp16 | bf16
     "WAN_FP8": "auto",           # pesi del transformer memorizzati in FP8 (auto = solo con 1 GPU)
     "FALLBACK_KENBURNS": True,   # se Wan fallisce, manda comunque uno zoom Ken Burns
+    "CHARACTER_PROMPT": "",      # descrizione fissa del personaggio, aggiunta a ogni didascalia
+    "NEGATIVE_EXTRA": "",        # cose da evitare, aggiunte al prompt negativo (es. maschera che sorride)
 }
 
 NEGATIVE_PROMPT = (
@@ -238,6 +240,19 @@ def parse_update(update: dict):
     return None
 
 
+def build_prompts(job_prompt: str, cfg: dict) -> tuple:
+    """Prompt positivo e negativo per Wan: didascalia + personaggio fisso + negativi extra."""
+    prompt = job_prompt or "cinematic shot, subtle natural motion, gentle camera movement"
+    character = (cfg.get("CHARACTER_PROMPT") or "").strip()
+    if character:
+        prompt = f"{prompt.rstrip(' .,')}. {character}"
+    negative = NEGATIVE_PROMPT
+    extra = (cfg.get("NEGATIVE_EXTRA") or "").strip()
+    if extra:
+        negative = f"{negative}, {extra}"
+    return prompt, negative
+
+
 # ---------------------------------------------------------------------------
 # Backend
 # ---------------------------------------------------------------------------
@@ -392,7 +407,8 @@ class WanBackend:
 
         frames = self.cfg["WAN_FRAMES_LONG"] if job.long else self.cfg["WAN_FRAMES"]
         steps = self.cfg["WAN_STEPS_FAST"] if job.fast else self.cfg["WAN_STEPS"]
-        prompt = job.prompt or "cinematic shot, subtle natural motion, gentle camera movement"
+        prompt, negative = build_prompts(job.prompt, self.cfg)
+        print(f"[wan] prompt: {prompt}")
 
         def on_step(pipe, i, t, kw):
             progress((i + 1) / steps)
@@ -403,9 +419,9 @@ class WanBackend:
                       callback_on_step_end=on_step)
         if self.te is not None:
             kwargs.update(prompt_embeds=self._embed(prompt),
-                          negative_prompt_embeds=self._embed(NEGATIVE_PROMPT))
+                          negative_prompt_embeds=self._embed(negative))
         else:
-            kwargs.update(prompt=prompt, negative_prompt=NEGATIVE_PROMPT)
+            kwargs.update(prompt=prompt, negative_prompt=negative)
 
         result = self.pipe(**kwargs).frames[0]
         raw = out_path + ".raw.mp4"
@@ -480,12 +496,19 @@ class Worker:
             # Il caricamento sta dentro il try: se fallisce (dipendenze, download)
             # l'utente riceve l'errore e il fallback, invece di perdere la foto.
             if hasattr(self.backend, "load"):
+                first = getattr(self.backend, "pipe", None) is None
+                t_load = self.clock()
                 self.backend.load(lambda t: self.tg.edit(job.chat_id, status_id, t))
+                if first:
+                    print(f"[tempi] modello caricato in {(self.clock() - t_load) / 60:.1f} min")
+            t_gen = self.clock()
             self.tg.edit(job.chat_id, status_id, "🎬 Genero il video… 0%")
             img = self.tg.download(job.file_id, os.path.join(tmpdir, "input.jpg"))
             out = self.backend.generate(img, job, os.path.join(tmpdir, "output.mp4"), progress)
             stop.set()
             mins = (self.clock() - t0) / 60
+            print(f"[tempi] video generato in {(self.clock() - t_gen) / 60:.1f} min "
+                  f"(job totale {mins:.1f} min)")
             caption = f"✅ Fatto in {mins:.1f} min" + (f"\n📝 {job.prompt}" if job.prompt else "")
             self.tg.send_video(job.chat_id, out, caption, reply_to=job.message_id)
             self.tg.edit(job.chat_id, status_id, "✅ Video pronto")
