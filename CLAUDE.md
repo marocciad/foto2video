@@ -82,6 +82,16 @@ kaggle kernels output <user>/foto2video-worker -p out/          # log dell'ultim
 - **App da promuovere**: BetForge, analisi e pronostici calcistici. ⚠️ In Italia il Decreto Dignità vieta la pubblicità del gioco con vincite in denaro, e i social hanno policy restrittive su scommesse e pronostici: segnalato a Daniele, che deve verificare.
 - **Vincoli**: tutto gratis per ora. Telegram ora, app Flutter in futuro. Nessun archivio oltre alla chat.
 
+## Regia virtuale (approvata da Daniele il 2026-10-11: "il video è bellissimo")
+
+Prototipo in `prototipi/` (gira sul PC, non ancora nel bot). Il formato approvato:
+- intro fissa registrata da Daniele (`personaggi/betforge/intro/`), poi il suo vocale con il contenuto;
+- voce 3 (rubberband 0.80 + eco corta, ~-14.7 LUFS), testo dei sottotitoli dal **copione** allineato ai tempi di whisper;
+- uno stacco di inquadratura per frase tra le 4 immagini del personaggio, bagliore verde tenue guidato dalla voce;
+- sottotitoli cinetici: 5 font OFL a rotazione, parole chiave più grandi, "BetForge" in oro, parola detta in verde con un "pop";
+- chiusura di circa 2,8 s con il logo (da `Betforge/public/icons/icon-512x512.png`, a bassa risoluzione: chiedere a Daniele un SVG o un PNG grande).
+- Wan non serve per questo formato: tutto CPU.
+
 ## Roadmap (in ordine di valore)
 
 1. **Collaudo su Kaggle** (kenburns → wan) e misura del tempo reale per clip sulla T4: tutto il resto si dimensiona su questo dato.
