@@ -1,5 +1,5 @@
 {
-  "id": "TUO_USERNAME_KAGGLE/foto2video-model-cache",
+  "id": "danielemaroccia/foto2video-model-cache",
   "title": "foto2video-model-cache",
   "code_file": "build_cache.py",
   "language": "python",
@@ -8,7 +8,7 @@
   "enable_gpu": false,
   "enable_tpu": false,
   "enable_internet": true,
-  "dataset_sources": ["TUO_USERNAME_KAGGLE/foto2video-secrets"],
+  "dataset_sources": ["danielemaroccia/foto2video-secrets"],
   "competition_sources": [],
   "kernel_sources": [],
   "model_sources": []

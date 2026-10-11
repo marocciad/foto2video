@@ -183,6 +183,15 @@ def test_dispatch_unknown_status_is_safe():
     assert dispatch.decide([photo_update(1)], {ME}, "unknown:boh") == "skip"
 
 
+def test_dispatch_classify_status():
+    c = dispatch.classify_status
+    assert c('u/k has status "KernelWorkerStatus.RUNNING"') == "running"
+    assert c("Cannot access kernel 'u/k' (Permission 'kernels.get' was denied).") == "missing"
+    assert c("404 Client Error: Not Found") == "missing"
+    assert c("401 Client Error: Unauthorized").startswith("unknown")
+    assert c("risposta strana").startswith("unknown")
+
+
 if __name__ == "__main__":
     import tempfile
     test_parse()

@@ -6,7 +6,9 @@ Uso, dalla radice del progetto:
     python setup/push_secrets.py              # crea/aggiorna il dataset
     python setup/push_secrets.py --use-cache  # in piu': collega il worker alla cache del modello
 
-Richiede la CLI kaggle autenticata (KAGGLE_USERNAME/KAGGLE_KEY o ~/.kaggle/kaggle.json).
+Richiede la CLI kaggle installata nello stesso Python (pip install -U kaggle).
+Credenziali: KAGGLE_USERNAME/KAGGLE_KEY in secrets.json, nell'ambiente o in ~/.kaggle/kaggle.json.
+Su Windows con piu' Python: py -3.12 setup/push_secrets.py
 Il dataset resta PRIVATO: contiene il token del bot.
 """
 
@@ -20,6 +22,15 @@ import tempfile
 SLUG = "foto2video-secrets"
 CACHE_SLUG = "wan22-ti2v-5b-fp16"
 REQUIRED = ("TELEGRAM_TOKEN", "ALLOWED_USER_IDS")
+# CLI dello stesso Python che esegue lo script (i token KGAT_ richiedono kaggle >= 1.8, Python >= 3.11)
+KAGGLE = [sys.executable, "-m", "kaggle"]
+
+
+def kaggle_env():
+    """I token nuovi (KGAT_...) vanno passati alla CLI come KAGGLE_API_TOKEN (auth Bearer)."""
+    key = os.environ.get("KAGGLE_KEY", "")
+    if key.startswith("KGAT_") and not os.environ.get("KAGGLE_API_TOKEN"):
+        os.environ["KAGGLE_API_TOKEN"] = os.environ.pop("KAGGLE_KEY")
 
 
 def kaggle_username() -> str:
@@ -33,6 +44,7 @@ def kaggle_username() -> str:
 
 
 def main():
+    sys.stdout.reconfigure(encoding="utf-8")  # la console Windows (cp1252) non stampa "→"
     if not os.path.exists("secrets.json"):
         sys.exit("Manca secrets.json: copialo da secrets.example.json e compilalo")
     with open("secrets.json", encoding="utf-8") as f:
@@ -41,17 +53,22 @@ def main():
     if missing or "il-token" in str(secrets.get("TELEGRAM_TOKEN")):
         sys.exit(f"secrets.json incompleto: {missing or ['TELEGRAM_TOKEN']}")
 
+    # Se le credenziali Kaggle non sono nell'ambiente, le prende da secrets.json
+    for key in ("KAGGLE_USERNAME", "KAGGLE_KEY"):
+        if secrets.get(key) and not os.environ.get(key):
+            os.environ[key] = str(secrets[key])
+    kaggle_env()
     user = kaggle_username()
     with tempfile.TemporaryDirectory() as d:
         shutil.copy("secrets.json", os.path.join(d, "secrets.json"))
         with open(os.path.join(d, "dataset-metadata.json"), "w", encoding="utf-8") as f:
             json.dump({"title": SLUG, "id": f"{user}/{SLUG}",
                        "licenses": [{"name": "other"}]}, f)
-        exists = subprocess.run(["kaggle", "datasets", "status", f"{user}/{SLUG}"],
+        exists = subprocess.run(KAGGLE + ["datasets", "status", f"{user}/{SLUG}"],
                                 capture_output=True, text=True).returncode == 0
-        cmd = (["kaggle", "datasets", "version", "-p", d, "-m", "aggiornamento secrets"]
-               if exists else ["kaggle", "datasets", "create", "-p", d])  # create = privato di default
-        print(" ".join(cmd[:3]), "→", f"{user}/{SLUG}")
+        cmd = (KAGGLE + ["datasets", "version", "-p", d, "-m", "aggiornamento secrets"]
+               if exists else KAGGLE + ["datasets", "create", "-p", d])  # create = privato di default
+        print(" ".join(cmd[len(KAGGLE) - 1:len(KAGGLE) + 2]), "→", f"{user}/{SLUG}")
         subprocess.run(cmd, check=True)
 
     for meta_path in (os.path.join("kaggle", "kernel-metadata.json"),

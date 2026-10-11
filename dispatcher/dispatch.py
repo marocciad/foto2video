@@ -10,7 +10,7 @@ Foto2Video - dispatcher (gira su GitHub Actions ogni 10 minuti).
    cosi' non accende la GPU per niente.
 
 Variabili d'ambiente: TELEGRAM_TOKEN, ALLOWED_USER_IDS, KAGGLE_USERNAME,
-KAGGLE_KEY, KERNEL_DIR (cartella con worker.py e kernel-metadata.json).
+KAGGLE_KEY (anche token KGAT_), KERNEL_DIR (cartella con worker.py e kernel-metadata.json).
 """
 
 from __future__ import annotations
@@ -59,18 +59,32 @@ def is_job(update: dict) -> bool:
     return bool(msg.get("photo")) or msg.get("document", {}).get("mime_type", "").startswith("image/")
 
 
-def kernel_status(kernel_id: str) -> str:
+def kaggle_env():
+    """I token nuovi (KGAT_...) vanno passati alla CLI come KAGGLE_API_TOKEN (auth Bearer)."""
+    key = os.environ.get("KAGGLE_KEY", "")
+    if key.startswith("KGAT_") and not os.environ.get("KAGGLE_API_TOKEN"):
+        os.environ["KAGGLE_API_TOKEN"] = os.environ.pop("KAGGLE_KEY")
+
+
+def classify_status(out: str) -> str:
     # Formato tipico: 'user/slug has status "KernelWorkerStatus.RUNNING"'
-    p = subprocess.run(["kaggle", "kernels", "status", kernel_id], capture_output=True, text=True)
-    out = (p.stdout + p.stderr).lower()
+    out = out.lower()
     if "401" in out or "unauthorized" in out:
         return "unknown:credenziali kaggle non valide"
-    if "404" in out or "not found" in out:
+    # La CLI 2.x risponde "Cannot access kernel ... 'kernels.get' was denied" anche
+    # per un kernel che non esiste ancora (primo avvio). Le credenziali sono gia'
+    # escluse dal controllo sopra, quindi qui il kernel semplicemente non c'e'.
+    if "404" in out or "not found" in out or "cannot access kernel" in out:
         return "missing"
     for state in ("running", "queued", "complete", "error", "cancel"):
         if state in out:
             return state
     return "unknown:" + out.strip()[:200]
+
+
+def kernel_status(kernel_id: str) -> str:
+    p = subprocess.run(["kaggle", "kernels", "status", kernel_id], capture_output=True, text=True)
+    return classify_status(p.stdout + p.stderr)
 
 
 def decide(updates: list, allowed: set, status: str) -> str:
@@ -85,6 +99,7 @@ def decide(updates: list, allowed: set, status: str) -> str:
 
 
 def main():
+    kaggle_env()
     token = os.environ["TELEGRAM_TOKEN"]
     allowed = parse_ids(os.environ.get("ALLOWED_USER_IDS", ""))
     kernel_dir = os.environ.get("KERNEL_DIR", "kaggle")

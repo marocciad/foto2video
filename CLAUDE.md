@@ -39,6 +39,8 @@ dispatcher/dispatch.py ── GitHub Actions cron */10: se kernel non attivo e c
 | Dispatcher: **prima** `kaggle kernels status`, **poi** Telegram | una getUpdates mentre il worker fa long polling causa 409 Conflict e gli chiude la connessione |
 | Dispatcher: stato Kaggle sconosciuto = non avviare | meglio perdere un giro che avviare due worker |
 | Errore fatale all'avvio del worker: avvisa e consuma la coda | evita il loop "dispatcher riavvia, worker crasha" |
+| Token Kaggle nuovi `KGAT_…` → passati alla CLI come `KAGGLE_API_TOKEN` (`kaggle_env()`) | accettano solo auth Bearer: servono la CLI kaggle ≥ 1.8 (oggi 2.x) e Python ≥ 3.11. Il secret GitHub resta `KAGGLE_KEY` |
+| CLI 2.x: "Cannot access kernel" = kernel mancante | per un kernel mai creato risponde così invece di 404. Senza questa regola il primo avvio non partirebbe mai |
 | Cache modello come dataset Kaggle (`model_cache/`), rilevata in automatico da `find_local_model()` | evita circa 30 GB di download a sessione |
 
 ## Comandi
@@ -46,7 +48,7 @@ dispatcher/dispatch.py ── GitHub Actions cron */10: se kernel non attivo e c
 ```bash
 pip install -r requirements-dev.txt     # serve anche ffmpeg nel PATH
 pytest -q                               # test senza rete (Telegram finto, ffmpeg reale)
-python setup/push_secrets.py            # crea/aggiorna il dataset privato dei secrets
+py -3.12 setup/push_secrets.py          # crea/aggiorna il dataset privato dei secrets (serve Python >= 3.11)
 cp worker/worker.py kaggle/ && kaggle kernels push -p kaggle   # avvio manuale del worker
 kaggle kernels status <user>/foto2video-worker
 kaggle kernels output <user>/foto2video-worker -p out/          # log dell'ultima esecuzione

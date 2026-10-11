@@ -44,6 +44,8 @@ def main():
     user = os.environ.get("KAGGLE_USERNAME")
     if not (user and os.environ.get("KAGGLE_KEY")):
         sys.exit("Servono KAGGLE_USERNAME e KAGGLE_KEY in secrets.json")
+    if os.environ["KAGGLE_KEY"].startswith("KGAT_"):  # token nuovo: auth Bearer
+        os.environ["KAGGLE_API_TOKEN"] = os.environ.pop("KAGGLE_KEY")
 
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-U",
                     "git+https://github.com/huggingface/diffusers",
