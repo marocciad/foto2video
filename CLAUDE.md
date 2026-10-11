@@ -73,6 +73,9 @@ kaggle kernels output <user>/foto2video-worker -p out/          # log dell'ultim
 - **Immagini del personaggio**: in `personaggi/betforge/` (gitignored): `01_campo_lungo`, `02_frontale` (16:9), `03_profilo_verso_sx` e `04_profilo_verso_dx` (9:16). Il prototipo di regia multi-angolo è stato approvato come direzione. Bagliore verde: tenerlo **tenue** (Daniele l'ha trovato troppo forte alla prima prova).
 - **Testo parlato e sottotitoli**: due modalità. (a) Daniele scrive il testo; (b) il bot propone un testo promozionale partendo da una descrizione. Per (b) serve un LLM piccolo e gratuito su Kaggle (candidato Qwen, Apache 2.0), caricato e poi scaricato prima di Wan.
 - **Voce**: **robotica/camuffata**, come una voce alterata per non farsi riconoscere. Si ottiene con TTS + effetti ffmpeg (pitch, ring-mod/vocoder, flanger).
+- **Voce scelta (2026-10-11)**: variante **3 "metallica"**: tono abbassato con `asetrate` 0.80 **senza `atempo`** (il time-stretch la rendeva a scatti), generando la TTS più veloce di 1/0.80 per compensare. Poi eco corta, flanger, passa-banda e loudnorm.
+- **Pronuncia di "BetForge"**: **inglese**, sintetizzata con una voce inglese di Kokoro (`am_onyx`) e montata nella frase italiana. La voce italiana aggiunge sempre una vocale finale ("forgi").
+- **Più carattere nel parlato**: Kokoro è piatto. Opzioni: (a) Daniele registra la voce (memo vocale su Telegram) → trascrizione per i tempi delle parole → effetto metallico; (b) TTS espressiva (candidato Chatterbox Multilingual, MIT, con controllo dell'enfasi) su GPU Kaggle.
 - **Musica**: niente nel video, Daniele la aggiunge dopo nell'app del social.
 - **Stile grafico**: verde BetForge `#22c55e` per la parola evidenziata (lo sfondo dell'app è `#080b10`).
 - **Logo / call-to-action finale**: non ora, ma va previsto come **opzione** disattivata di default.
