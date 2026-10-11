@@ -59,15 +59,27 @@ kaggle kernels output <user>/foto2video-worker -p out/          # log dell'ultim
   Primo collaudo: `BACKEND=kenburns` → catena ok → `BACKEND=wan`. Poi leggi i log con `kaggle kernels output`.
 - Rischi da verificare al collaudo: qualità in FP8 storage (disattivabile con `WAN_FP8=false`), UMT5 in fp16 (possibili NaN → `WAN_DTYPE=bf16`), output nero in fp16 (→ `WAN_DTYPE=bf16`), OOM (→ `WAN_MAX_AREA` più basso), `from_pretrained(text_encoder=None, tokenizer=None)` sul ramo a 2 GPU, valore di `machine_shape` accettato dalla CLI, tempo reale per clip.
 
+## Obiettivo d'uso (risposte di Daniele, 2026-10-11)
+
+- **Scopo**: video promozionali per **sponsorizzare la sua app** su tutti i social e su YouTube, quindi uso **commerciale**. Wan (Apache 2.0) va bene; per ogni componente nuovo (modelli, TTS, font, musica) va verificata la licenza commerciale.
+- **Volume**: circa 3 video al giorno, un solo utente. Nessuna fretta e nessuna fascia oraria preferita.
+- **Soggetto tipico**: un'immagine generata con un **personaggio inventato con una maschera**, seduto in uno studio. Il soggetto **agisce** (non solo movimenti di camera). La maschera rende superfluo il lip-sync.
+- **Output desiderato**: 720p, **10–30 s**, più formati in base al social (9:16, 16:9, 1:1), **audio** e **sottotitoli animati in stile social** (parola per parola, evidenziati).
+- **Interazione**: prompt in italiano con traduzione automatica in inglese (disattivabile). Sia didascalia libera sia bottoni/preset. Messaggi di conferma e di avanzamento. Foto inviate anche come **file**, a qualità piena.
+- **Vincoli**: tutto gratis per ora. Telegram ora, app Flutter in futuro. Nessun archivio oltre alla chat.
+
 ## Roadmap (in ordine di valore)
 
-1. **Collaudo su Kaggle** e taratura dei default (risoluzione, frame, step) sui tempi reali della T4.
+1. **Collaudo su Kaggle** (kenburns → wan) e misura del tempo reale per clip sulla T4: tutto il resto si dimensiona su questo dato.
 2. **Cache del modello**: implementata (`model_cache/build_cache.py`) ma **non collaudata**. Da verificare: che `--dir-mode zip` venga estratto in cartelle su `/kaggle/input`, lo spazio disco in `/tmp` durante la build (circa 45 GB di picco) e i tempi reali di avvio.
-3. **Post-produzione "cinematografica"** in ffmpeg: interpolazione a 48/60 fps (`minterpolate` o RIFE), bande letterbox, color grade (LUT), musica opzionale.
-4. **Formato di output**: tag `#verticale`/`#orizzontale`/`#quadrato` con crop guidato.
-5. **Backend LTX-2.3** come alternativa veloce, con audio nativo (attenzione alla licenza).
-6. **Personaggio ricorrente**: LoRA di volto per Wan (Daniele ha già esperienza con LoRA SDXL).
-7. **Montaggio multi-clip**: più foto → più clip → un video unico con transizioni.
+3. **Formati**: tag `#verticale`/`#orizzontale`/`#quadrato` e bottoni. Wan genera direttamente nell'aspect ratio scelto, senza crop.
+4. **Video lunghi (10–30 s)**: catena di clip di circa 5 s, ognuna partendo dall'ultimo fotogramma della precedente, poi concatenate. Per la quota conviene generare a 480p e fare upscale a 720p dopo.
+5. **Voce + sottotitoli animati**: testo della voce fuori campo → TTS italiano (candidato Kokoro-82M, Apache 2.0) → timestamp per parola (faster-whisper) → sottotitoli ASS in stile social, impressi nel video con ffmpeg/libass. Font OFL (es. Montserrat ExtraBold).
+6. **Prompt IT→EN** automatico (candidato opus-mt-it-en su CPU), con eventuale "arricchimento" del prompt.
+7. **Post-produzione**: interpolazione a 48/60 fps (RIFE), upscale, musica opzionale (royalty-free, o aggiunta direttamente nell'app del social).
+8. **Personaggio ricorrente**: per ora basta la stessa immagine di partenza. LoRA solo se la coerenza tra clip non basta.
+9. **App Flutter** come seconda interfaccia (oltre a Telegram).
+10. **Backend LTX-2.3** come alternativa veloce con audio nativo: verificare la licenza per uso commerciale.
 
 ## Regole
 
