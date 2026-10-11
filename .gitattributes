@@ -2,3 +2,6 @@
 *.jpg binary
 *.png binary
 *.mp4 binary
+*.ttf binary
+*.wav binary
+*.ogg binary

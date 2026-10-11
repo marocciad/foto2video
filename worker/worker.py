@@ -231,6 +231,10 @@ def parse_update(update: dict):
         return Job(file_id=file_id, prompt=prompt, long="lungo" in tags,
                    fast="veloce" in tags, **base)
 
+    if msg.get("voice") or msg.get("audio"):
+        # i vocali li monta lo studio su GitHub, non il worker GPU
+        return Command(name="vocale", **base)
+
     text = (msg.get("text") or "").strip()
     if text.startswith("/"):
         name = text.split()[0][1:].split("@")[0].lower()
@@ -458,6 +462,10 @@ class Worker:
             self.tg.send(c.chat_id, f"Il tuo ID Telegram è: {c.user_id}", reply_to=c.message_id)
         elif not self.allowed(c.user_id):
             self.tg.send(c.chat_id, "⛔ Bot privato.", reply_to=c.message_id)
+        elif c.name == "vocale":
+            self.tg.send(c.chat_id, "🎙️ Vocale arrivato mentre la GPU lavorava sulle foto: non posso "
+                         "montarlo da qui. Rimandalo (con il testo) quando ricevi il video.",
+                         reply_to=c.message_id)
         elif c.name in ("start", "help", "aiuto", "testo"):
             self.tg.send(c.chat_id, HELP_TEXT, markdown=True)
         else:

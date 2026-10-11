@@ -8,3 +8,4 @@ __pycache__/
 personaggio*.*
 personaggi/
 demo/
+!studio/personaggio.example.json

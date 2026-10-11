@@ -62,7 +62,47 @@ Il worker trova il modello da solo in `/kaggle/input`. Se il dataset manca, ripi
 ### 5. Primo test (consigliato)
 Metti `"BACKEND": "kenburns"` nel `secrets.json` (aggiorna il dataset con una nuova versione) e manda una foto al bot. Riceverai uno zoom lento fatto con ffmpeg: se arriva, tutta la catena Telegram → GitHub → Kaggle funziona. Poi torna a `"wan"`.
 
-## Uso
+## Studio: video con la tua voce (regia virtuale)
+
+Il formato principale per i video promozionali. **Non usa la GPU**: gira su GitHub Actions in circa 5–10 minuti.
+
+1. Manda al bot un **vocale** con il testo da dire.
+2. Per sottotitoli perfetti manda anche il **testo** del vocale come messaggio, prima o dopo, entro 10 minuti.
+   - Se manca il testo, il bot aspetta 90 s e poi usa la trascrizione automatica, che può sbagliare qualche parola.
+3. Ricevi il video in **9:16** e **16:9**: intro registrata, stacchi di inquadratura su ogni frase, voce camuffata, sottotitoli animati e logo finale.
+
+Tag nel testo: `#verticale` o `#orizzontale` (un solo formato), `#nointro`.
+
+### Il personaggio (asset privati)
+
+Immagini, logo, intro e inquadrature stanno in `personaggi/<nome>/`, cartella **esclusa da git**. Si caricano in un dataset Kaggle privato:
+
+```bash
+py -3.12 setup/push_assets.py
+```
+
+Nel dataset finiscono:
+- `personaggio.json`: inquadrature per formato, testo dell'intro, parole da evidenziare. Esempio in `studio/personaggio.example.json`;
+- le immagini citate in `personaggio.json`;
+- `logo.png`: logo su sfondo nero;
+- `intro/intro_pulita.wav`: l'intro registrata, già ripulita.
+
+Rilancia lo script ogni volta che cambi qualcosa.
+
+### Avvio puntuale con cron-job.org
+
+Il cron di GitHub può tardare anche ore. Per un bot reattivo, un servizio gratuito come [cron-job.org](https://cron-job.org) chiama GitHub ogni 5 minuti.
+
+1. Su GitHub crea un **fine-grained token**: Settings → Developer settings → Personal access tokens → Fine-grained.
+   - Accesso al **solo** repository `foto2video`.
+   - Permesso **Actions: Read and write**. Nessun altro.
+2. Su cron-job.org crea un job:
+   - **URL**: `https://api.github.com/repos/<utente>/foto2video/actions/workflows/dispatch.yml/dispatches`
+   - **Metodo**: POST, ogni 5 minuti
+   - **Header**: `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`
+   - **Corpo**: `{"ref":"main"}`
+
+## Uso (foto → video IA su GPU)
 
 Manda una **foto con didascalia** che descrive il movimento, meglio in inglese:
 
@@ -103,9 +143,15 @@ Comandi: `/help`, `/id`.
 ## Struttura
 
 ```
+studio/                   regia virtuale: vocale -> video (gira su GitHub Actions, CPU)
+  audio.py                pulizia, voce camuffata, volume, trascrizione, allineamento al copione
+  regia.py                inquadrature, bagliore, sottotitoli cinetici, logo finale
+  __main__.py             legge la coda Telegram (vocali + copioni) e monta i video
+  fonts/                  5 font OFL (licenze incluse)
+setup/push_assets.py      carica personaggi/ in un dataset Kaggle privato
 worker/worker.py          bot + generazione (gira su Kaggle)
 dispatcher/dispatch.py    accende Kaggle quando servono foto (gira su GitHub)
 kaggle/kernel-metadata.json
 .github/workflows/dispatch.yml
-tests/test_bot.py         test senza rete: python3 tests/test_bot.py
+tests/                    test senza rete: pytest -q
 ```

@@ -140,11 +140,13 @@ def test_dispatch_decide():
     assert dispatch.decide([], allowed, "complete") == "idle"
     assert dispatch.decide([photo_update(1)], allowed, "complete") == "start"
     assert dispatch.decide([photo_update(1)], allowed, "missing") == "start"
-    assert dispatch.decide([photo_update(1, user=STRANGER)], allowed, "complete") == "reply"
-    assert dispatch.decide([text_update(1, "/help")], allowed, "error") == "reply"
+    # tutto cio' che non e' una foto in testa alla coda va allo studio
+    assert dispatch.decide([photo_update(1, user=STRANGER)], allowed, "complete") == "studio"
+    assert dispatch.decide([text_update(1, "/help")], allowed, "error") == "studio"
     voice = {"update_id": 2, "message": {"message_id": 20, "chat": {"id": ME}, "from": {"id": ME},
                                          "voice": {"file_id": "v", "duration": 5}}}
-    assert dispatch.decide([text_update(1, "/help"), voice], allowed, "complete") == "idle"
+    assert dispatch.decide([voice, photo_update(3)], allowed, "complete") == "studio"
+    assert dispatch.decide([photo_update(3), voice], allowed, "complete") == "start"
 
 
 def test_fallback_kenburns_on_failure(tmp_path):
@@ -248,6 +250,13 @@ def test_build_prompts():
     assert p == "he raises a hand. rigid white mask"
     assert n.startswith(w.NEGATIVE_PROMPT) and n.endswith(", smiling mask")
     assert w.build_prompts("", {})[0]  # senza didascalia c'e' comunque un prompt
+
+
+def test_worker_voice_gets_resend_hint():
+    voice = {"update_id": 5, "message": {"message_id": 50, "chat": {"id": ME}, "from": {"id": ME},
+                                         "voice": {"file_id": "v", "duration": 5}}}
+    c = w.parse_update(voice)
+    assert isinstance(c, w.Command) and c.name == "vocale"
 
 
 if __name__ == "__main__":

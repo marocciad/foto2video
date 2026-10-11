@@ -6,8 +6,8 @@ Foto2Video - dispatcher (gira su GitHub Actions ogni 10 minuti).
 2. Altrimenti guarda i messaggi in attesa su Telegram SENZA confermarli.
 3. Se c'e' almeno una foto di un utente autorizzato, avvia il notebook
    su Kaggle (kaggle kernels push) e avvisa in chat.
-4. Se ci sono solo comandi/testo, risponde con l'aiuto e li conferma,
-   cosi' non accende la GPU per niente.
+4. Altrimenti (vocali, copioni, comandi) passa la mano allo studio
+   (`python -m studio`, regia virtuale su CPU) tramite l'output `action=studio`.
 
 Variabili d'ambiente: TELEGRAM_TOKEN, ALLOWED_USER_IDS, KAGGLE_USERNAME,
 KAGGLE_KEY (anche token KGAT_), KERNEL_DIR (cartella con worker.py e kernel-metadata.json).
@@ -29,11 +29,6 @@ ACTIVE_STATES = ("running", "queued")
 # sconosciuto (API giu', output CLI cambiato) NON avviamo: meglio aspettare
 # il prossimo giro che rischiare due worker in parallelo.
 STARTABLE_STATES = ("complete", "error", "cancel", "missing")
-
-HELP_SHORT = ("🎬 Mandami una foto con una didascalia che descrive il movimento. "
-              "Aggiungi #lungo per ~5 s o #veloce per fare prima. "
-              "Quando arriva una foto accendo la GPU: il primo video richiede qualche minuto in più.")
-
 
 def tg(token: str, method: str, retries: int = 3, **params):
     for attempt in range(retries):
@@ -93,18 +88,29 @@ def is_audio(update: dict) -> bool:
 
 
 def decide(updates: list, allowed: set, status: str) -> str:
-    """Logica pura, testabile: 'skip' | 'idle' | 'start' | 'reply'."""
+    """Logica pura, testabile: 'skip' | 'idle' | 'start' | 'studio'.
+
+    - start: la prima cosa in coda di un utente autorizzato e' una foto -> worker GPU su Kaggle;
+    - studio: tutto il resto (vocali, copioni, comandi, estranei) -> `python -m studio` su
+      GitHub Actions, che si ferma da solo alla prima foto e la lascia in coda per Kaggle.
+    """
     if status in ACTIVE_STATES or status not in STARTABLE_STATES:
         return "skip"
     if not updates:
         return "idle"
-    if any(is_job(u) and (not allowed or u["message"]["from"]["id"] in allowed) for u in updates):
+    mine = [u for u in updates if (u.get("message") or {}).get("from", {}).get("id") in allowed]
+    if mine and is_job(mine[0]) and mine[0] is updates[0]:
         return "start"
-    # Vocali dell'utente: restano in coda (servono per la regia con la sua voce).
-    # Rispondere confermerebbe tutti gli update e li cancellerebbe.
-    if any(is_audio(u) and u["message"]["from"]["id"] in allowed for u in updates):
-        return "idle"
-    return "reply"
+    return "studio"
+
+
+def set_output(**values):
+    """Passa la decisione ai passi successivi del workflow (installano ffmpeg/whisper solo se serve)."""
+    path = os.environ.get("GITHUB_OUTPUT")
+    if path:
+        with open(path, "a", encoding="utf-8") as f:
+            for k, v in values.items():
+                f.write(f"{k}={v}\n")
 
 
 def main():
@@ -131,6 +137,7 @@ def main():
     updates = tg(token, "getUpdates", timeout=0, allowed_updates=["message"])
     action = decide(updates, allowed, status)
     print(f"[dispatch] {len(updates)} messaggi in attesa -> {action}")
+    set_output(action=action, media=int(any(is_audio(u) for u in updates)))
 
     if action == "start":
         p = subprocess.run(["kaggle", "kernels", "push", "-p", kernel_dir], capture_output=True, text=True)
@@ -150,22 +157,6 @@ def main():
             tg(token, "sendMessage", chat_id=chat_id, text=text)
         if not ok:
             sys.exit(1)
-
-    elif action == "reply":
-        for u in updates:
-            msg = u.get("message") or {}
-            if "chat" not in msg:
-                continue
-            uid = msg.get("from", {}).get("id")
-            text = (msg.get("text") or "").strip().lower()
-            if text.startswith("/id"):
-                reply = f"Il tuo ID Telegram è: {uid}"
-            elif allowed and uid not in allowed:
-                reply = "⛔ Bot privato."
-            else:
-                reply = HELP_SHORT
-            tg(token, "sendMessage", chat_id=msg["chat"]["id"], text=reply)
-        tg(token, "getUpdates", offset=updates[-1]["update_id"] + 1, timeout=0, limit=1)
 
 
 if __name__ == "__main__":

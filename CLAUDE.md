@@ -16,6 +16,7 @@ worker/worker.py ── gira su Kaggle (T4), long polling, genera, si spegne dop
 dispatcher/dispatch.py ── GitHub Actions cron */10: se kernel non attivo e ci sono foto → push
 ```
 
+- **Studio** (`studio/`, il formato principale): stesso workflow del dispatcher. Se la coda non inizia con una foto, `dispatch.py` scrive `action=studio` e il workflow installa ffmpeg e whisper, scarica gli asset privati (dataset Kaggle `foto2video-assets`) e lancia `python -m studio`. Lo studio monta vocale (+ copione) → video in 9:16 e 16:9 su CPU, e si ferma alla prima foto, che resta per Kaggle.
 - Nessun database: la coda è Telegram stesso. Firebase scartato perché Storage/Functions richiedono il piano Blaze.
 - `worker.py` deve restare **un unico file**, perché Kaggle `kernel_type: script` esegue un solo `code_file`. Il workflow lo copia in `kaggle/` prima del push.
 - Le dipendenze pesanti (torch, diffusers) si importano **solo dentro** `WanBackend`, così i test girano senza GPU.
@@ -41,13 +42,20 @@ dispatcher/dispatch.py ── GitHub Actions cron */10: se kernel non attivo e c
 | Errore fatale all'avvio del worker: avvisa e consuma la coda | evita il loop "dispatcher riavvia, worker crasha" |
 | Token Kaggle nuovi `KGAT_…` → passati alla CLI come `KAGGLE_API_TOKEN` (`kaggle_env()`) | accettano solo auth Bearer: servono la CLI kaggle ≥ 1.8 (oggi 2.x) e Python ≥ 3.11. Il secret GitHub resta `KAGGLE_KEY` |
 | CLI 2.x: "Cannot access kernel" = kernel mancante | per un kernel mai creato risponde così invece di 404. Senza questa regola il primo avvio non partirebbe mai |
+| Studio su GitHub Actions, non su Kaggle | la regia virtuale è solo CPU: niente quota GPU e niente avvio del notebook. Repo pubblico = minuti illimitati |
+| Asset del personaggio in un dataset Kaggle privato (`setup/push_assets.py`) | il repo è pubblico. Il workflow li scarica solo quando serve |
+| Coda studio: conferma solo il **prefisso contiguo** gestito (`confirm_offset`) | Telegram conferma tutto ciò che sta prima dell'offset: vocale e copione possono non essere adiacenti |
+| Vocale senza copione: attesa di 90 s; copione senza vocale: attesa di 15 min | il copione può arrivare dopo il vocale, e registrare richiede tempo |
+| Sottotitoli: testo dal copione, tempi da whisper (`align_script`) | whisper sbaglia qualche parola ("matematico", "gol a test"); il copione è esatto |
+| Whisper `small` su Actions | con il copione bastano i tempi, e `small` è circa 10 volte più veloce di `medium` |
 | Cache modello come dataset Kaggle (`model_cache/`), rilevata in automatico da `find_local_model()` | evita circa 30 GB di download a sessione |
 
 ## Comandi
 
 ```bash
 pip install -r requirements-dev.txt     # serve anche ffmpeg nel PATH
-pytest -q                               # test senza rete (Telegram finto, ffmpeg reale)
+pytest -q                               # test senza rete (Telegram finto, ffmpeg reale; lo studio richiede ffmpeg con rubberband e libass)
+py -3.12 setup/push_assets.py           # carica personaggi/ nel dataset privato foto2video-assets
 py -3.12 setup/push_secrets.py          # crea/aggiorna il dataset privato dei secrets (serve Python >= 3.11)
 cp worker/worker.py kaggle/ && kaggle kernels push -p kaggle   # avvio manuale del worker
 kaggle kernels status <user>/foto2video-worker
@@ -84,7 +92,7 @@ kaggle kernels output <user>/foto2video-worker -p out/          # log dell'ultim
 
 ## Regia virtuale (approvata da Daniele il 2026-10-11: "il video è bellissimo")
 
-Prototipo in `prototipi/` (gira sul PC, non ancora nel bot). Il formato approvato:
+Implementata in `studio/` (prototipi originali in `prototipi/`). Il formato approvato:
 - intro fissa registrata da Daniele (`personaggi/betforge/intro/`), poi il suo vocale con il contenuto;
 - voce 3 (rubberband 0.80 + eco corta, ~-14.7 LUFS), testo dei sottotitoli dal **copione** allineato ai tempi di whisper;
 - uno stacco di inquadratura per frase tra le 4 immagini del personaggio, bagliore verde tenue guidato dalla voce;

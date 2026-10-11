@@ -1,0 +1,267 @@
+"""Studio: vocale su Telegram -> video con la regia virtuale (gira su GitHub Actions, CPU).
+
+    python -m studio
+
+Variabili d'ambiente: TELEGRAM_TOKEN, ALLOWED_USER_IDS, ASSETS_DIR (default "assets"),
+CHARACTER (sottocartella del personaggio, default "betforge"), WHISPER_MODEL (default "small").
+
+Uso dal bot: si manda un **vocale** con il contenuto e, per avere sottotitoli esatti, il
+**copione** come messaggio di testo (prima o dopo il vocale, entro 10 minuti).
+Tag nel copione: #verticale / #orizzontale (un solo formato), #nointro (senza intro).
+Le foto non si toccano: restano in coda per il worker su Kaggle.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import shutil
+import sys
+import tempfile
+import time
+
+import requests
+
+PAIR_WINDOW = 600     # s: distanza massima tra vocale e copione
+WAIT_VOICE = 90       # s: un vocale senza copione aspetta un po', il copione potrebbe arrivare dopo
+WAIT_TEXT = 900       # s: un copione senza vocale aspetta il vocale (registrare richiede tempo)
+
+HELP = ("🎬 *Studio BetForge*\n\n"
+        "1. Manda un *vocale* con il testo da dire.\n"
+        "2. Per sottotitoli perfetti manda anche il *testo* del vocale come messaggio "
+        "(prima o dopo, entro 10 minuti).\n\n"
+        "Ricevi il video in 9:16 e 16:9 in circa 5–10 minuti.\n"
+        "Nel testo puoi aggiungere `#verticale` o `#orizzontale` (un solo formato) e `#nointro`.\n"
+        "Le *foto* con didascalia vanno ancora al generatore IA su GPU.")
+
+
+# ---------------------------------------------------------------------------
+# Pianificazione della coda (logica pura, testata)
+# ---------------------------------------------------------------------------
+
+def kind(msg: dict) -> str:
+    if msg.get("voice") or msg.get("audio"):
+        return "voice"
+    if msg.get("photo") or msg.get("document", {}).get("mime_type", "").startswith("image/"):
+        return "photo"
+    text = (msg.get("text") or "").strip()
+    if text.startswith("/"):
+        return "command"
+    return "text" if text else "other"
+
+
+def plan_queue(updates: list, allowed: set, now: float) -> list:
+    """Divide la coda in lavori da fare, in ordine. Ogni lavoro ha gli update_id che "consuma".
+
+    Lavori: {"tipo": "video", "voce": msg, "copione": msg|None, "ids": [...]},
+            {"tipo": "risposta", "msg": msg, "testo": str, "ids": [...]}, {"tipo": "ignora", "ids": [...]}.
+    Si ferma (senza consumarli) a: prima foto di un utente autorizzato (e' per Kaggle), vocale troppo
+    recente senza copione, copione che aspetta ancora il suo vocale.
+    """
+    msgs = [(u["update_id"], u.get("message") or {}) for u in updates]
+    # 1) abbina ogni vocale al testo dello stesso utente piu' vicino nel tempo
+    texts = [(uid, m) for uid, m in msgs if kind(m) == "text" and m.get("from", {}).get("id") in allowed]
+    pair, used = {}, set()
+    for uid, m in msgs:
+        if kind(m) == "voice" and m.get("from", {}).get("id") in allowed:
+            cands = [(abs(t["date"] - m["date"]), tid, t) for tid, t in texts
+                     if tid not in used and t["from"]["id"] == m["from"]["id"]
+                     and abs(t["date"] - m["date"]) <= PAIR_WINDOW]
+            if cands:
+                _, tid, t = min(cands, key=lambda c: c[0])
+                pair[uid] = (tid, t)
+                used.add(tid)
+    # 2) lavori in ordine di coda
+    jobs = []
+    for uid, m in msgs:
+        user = m.get("from", {}).get("id")
+        k = kind(m)
+        if uid in used:
+            continue  # copione: viaggia con il suo vocale
+        if user not in allowed:
+            reply = "⛔ Bot privato." if k != "other" else None
+            jobs.append({"tipo": "risposta", "msg": m, "testo": reply, "ids": [uid]} if reply
+                        else {"tipo": "ignora", "ids": [uid]})
+            continue
+        if k == "photo":
+            break  # resta in coda per il worker GPU
+        if k == "voice":
+            if uid not in pair and now - m.get("date", now) < WAIT_VOICE:
+                break  # il copione potrebbe arrivare tra poco
+            tid, t = pair.get(uid, (None, None))
+            jobs.append({"tipo": "video", "voce": m, "copione": t, "ids": [uid] + ([tid] if tid else [])})
+        elif k == "text":
+            if now - m.get("date", now) < WAIT_TEXT:
+                break  # copione in attesa del suo vocale
+            jobs.append({"tipo": "risposta", "msg": m, "ids": [uid],
+                         "testo": "📝 Ho ricevuto un testo ma nessun vocale entro 15 minuti. "
+                                  "Rimanda il testo insieme al vocale."})
+        elif k == "command":
+            name = m["text"].split()[0][1:].split("@")[0].lower()
+            reply = f"Il tuo ID Telegram è: {user}" if name == "id" else HELP
+            jobs.append({"tipo": "risposta", "msg": m, "testo": reply, "ids": [uid], "markdown": name != "id"})
+        else:
+            jobs.append({"tipo": "ignora", "ids": [uid]})
+    return jobs
+
+
+def confirm_offset(all_ids: list, handled: set):
+    """Telegram conferma tutto cio' che sta prima dell'offset: si conferma solo il tratto iniziale
+    della coda gia' gestito per intero. None se non c'e' niente da confermare."""
+    offset = None
+    for uid in sorted(all_ids):
+        if uid not in handled:
+            break
+        offset = uid + 1
+    return offset
+
+
+def parse_tags(text: str) -> tuple:
+    tags = {t.lower() for t in re.findall(r"#(\w+)", text or "")}
+    clean = re.sub(r"#\w+", "", text or "").strip()
+    formats = ["9x16", "16x9"]
+    if "verticale" in tags:
+        formats = ["9x16"]
+    elif "orizzontale" in tags:
+        formats = ["16x9"]
+    return clean, formats, "nointro" in tags
+
+
+# ---------------------------------------------------------------------------
+# Telegram
+# ---------------------------------------------------------------------------
+
+class Telegram:
+    def __init__(self, token: str):
+        self.base = f"https://api.telegram.org/bot{token}"
+        self.file_base = f"https://api.telegram.org/file/bot{token}"
+
+    def call(self, method: str, http_timeout: float = 60, files=None, **params):
+        r = requests.post(f"{self.base}/{method}", data=params if files else None,
+                          json=None if files else params, files=files, timeout=http_timeout)
+        data = r.json()
+        if not data.get("ok"):
+            raise RuntimeError(f"Telegram {method}: {data.get('description')}")
+        return data["result"]
+
+    def send(self, chat_id, text, reply_to=None, markdown=False):
+        params = {"chat_id": chat_id, "text": text}
+        if reply_to:
+            params.update(reply_to_message_id=reply_to, allow_sending_without_reply=True)
+        if markdown:
+            params["parse_mode"] = "Markdown"
+        return self.call("sendMessage", **params)["message_id"]
+
+    def edit(self, chat_id, message_id, text):
+        try:
+            self.call("editMessageText", chat_id=chat_id, message_id=message_id, text=text)
+        except RuntimeError as e:
+            if "not modified" not in str(e):
+                print(f"[studio] edit fallita: {e}")
+
+    def download(self, file_id, dest):
+        path = self.call("getFile", file_id=file_id)["file_path"]
+        r = requests.get(f"{self.file_base}/{path}", timeout=120)
+        r.raise_for_status()
+        with open(dest, "wb") as f:
+            f.write(r.content)
+        return dest
+
+    def send_video(self, chat_id, path, caption, size, reply_to=None):
+        with open(path, "rb") as f:
+            params = {"chat_id": chat_id, "caption": caption[:1024], "supports_streaming": "true",
+                      "width": size[0], "height": size[1]}
+            if reply_to:
+                params.update(reply_to_message_id=reply_to, allow_sending_without_reply="true")
+            return self.call("sendVideo", http_timeout=300, files={"video": ("video.mp4", f, "video/mp4")},
+                             **params)
+
+
+# ---------------------------------------------------------------------------
+# Lavorazione
+# ---------------------------------------------------------------------------
+
+def make_video(tg: Telegram, job: dict, assets: str, whisper_model: str):
+    from studio import audio, regia  # import pigro: numpy/Pillow/whisper servono solo qui
+
+    voice = job["voce"]
+    chat, mid = voice["chat"]["id"], voice["message_id"]
+    script, formats, no_intro = parse_tags((job["copione"] or {}).get("text", ""))
+    status = tg.send(chat, "🎙️ Vocale ricevuto" + (" con il testo" if script else "")
+                     + ": preparo il video (circa 5–10 minuti)…", reply_to=mid)
+    t0 = time.time()
+    work = tempfile.mkdtemp(prefix="studio_")
+    try:
+        character = regia.load_character(assets)
+        tg.edit(chat, status, "🔊 Pulisco l'audio e applico la voce…")
+        v = voice.get("voice") or voice.get("audio")
+        raw = tg.download(v["file_id"], os.path.join(work, "vocale.ogg"))
+        content = os.path.join(work, "contenuto.wav")
+        audio.clean(raw, content)
+        parts = [content]
+        intro = os.path.join(assets, character.get("intro", ""))
+        if not no_intro and character.get("intro") and os.path.exists(intro):
+            parts.insert(0, intro)  # l'intro e' gia' ripulita (una volta sola!)
+        dry = os.path.join(work, "voce_pulita.wav")
+        if len(parts) > 1:
+            audio.concat(parts, dry)
+        else:
+            shutil.copy(content, dry)
+        wet = os.path.join(work, "voce.wav")
+        audio.voice3(dry, wet)
+
+        tg.edit(chat, status, "📝 Trascrivo per i sottotitoli…")
+        words = audio.transcribe(dry, whisper_model)
+        if script:
+            full = script
+            if len(parts) > 1 and character.get("testo_intro"):
+                full = character["testo_intro"] + " " + script
+            words = audio.align_script(full, words)
+        phrases = audio.split_phrases(words)
+        if not phrases:
+            raise RuntimeError("non ho riconosciuto parole nel vocale")
+        emphasis = {w.lower() for w in character.get("enfasi", [])}
+
+        for fmt in formats:
+            tg.edit(chat, status, f"🎬 Monto il video {fmt.replace('x', ':')}…")
+            out = os.path.join(work, f"video_{fmt}.mp4")
+            r = regia.Renderer(assets, character, fmt)
+            r.render(wet, phrases, out, emphasis)
+            tg.send_video(chat, out, f"🎬 {fmt.replace('x', ':')}", r.size, reply_to=mid)
+        tg.edit(chat, status, f"✅ Fatto in {(time.time() - t0) / 60:.1f} min")
+    except Exception as e:  # noqa: BLE001 - qualunque errore va riportato in chat
+        print(f"[studio] errore: {e!r}")
+        tg.edit(chat, status, f"❌ Errore: {str(e)[:300]}")
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def main():
+    token = os.environ["TELEGRAM_TOKEN"]
+    allowed = {int(v) for v in re.findall(r"-?\d+", os.environ.get("ALLOWED_USER_IDS", ""))}
+    if not allowed:
+        sys.exit("ALLOWED_USER_IDS vuoto: il bot resta privato, non parto")
+    assets = os.path.join(os.environ.get("ASSETS_DIR", "assets"), os.environ.get("CHARACTER", "betforge"))
+    whisper_model = os.environ.get("WHISPER_MODEL", "small")
+    tg = Telegram(token)
+
+    updates = tg.call("getUpdates", timeout=0, allowed_updates=["message"])
+    all_ids = [u["update_id"] for u in updates]
+    jobs = plan_queue(updates, allowed, time.time())
+    print(f"[studio] {len(updates)} update in coda, {len(jobs)} lavori")
+    handled = set()
+    for job in jobs:
+        handled.update(job["ids"])
+        # at-most-once: si conferma PRIMA di lavorare, cosi' un crash non crea un loop
+        offset = confirm_offset(all_ids, handled)
+        if offset:
+            tg.call("getUpdates", offset=offset, timeout=0, limit=1)
+        if job["tipo"] == "risposta":
+            m = job["msg"]
+            tg.send(m["chat"]["id"], job["testo"], reply_to=m.get("message_id"), markdown=job.get("markdown", False))
+        elif job["tipo"] == "video":
+            make_video(tg, job, assets, whisper_model)
+
+
+if __name__ == "__main__":
+    main()
