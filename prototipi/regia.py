@@ -92,17 +92,35 @@ def words_with_times(p):
     return out
 
 
-fs, mv = (64, 300) if fmt == "9x16" else (58, 90)
+# Sottotitoli "cinetici": ogni gruppo di parole entra con movimento, font che cambia a ogni gruppo,
+# parole importanti piu' grandi e parole corte piu' piccole, parola detta in verde con un "pop".
+import random
+rnd = random.Random(7)
+FONTS = [("Anton", 1.0), ("Bebas Neue", 1.18), ("Archivo Black", 0.82), ("Russo One", 0.85), ("Black Ops One", 0.85)]
+EMPHASIS = {"betforge", "numeri", "matematica", "dati", "pronostici", "tutti", "gol", "forma", "rating",
+            "migliaia", "istinto", "tracce", "benvenuti", "io"}
+fs = 66 if fmt == "9x16" else 60
+X, Y = OUT[0] // 2, int(OUT[1] * (0.70 if fmt == "9x16" else 0.80))
 ass = [
-    "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {OUT[0]}", f"PlayResY: {OUT[1]}", "",
+    "[Script Info]", "ScriptType: v4.00+", "WrapStyle: 0", f"PlayResX: {OUT[0]}", f"PlayResY: {OUT[1]}", "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
     "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    f"Style: S,Anton,{fs},&H00FFFFFF,&H00FFFFFF,&H00100B08,&H96000000,0,0,0,0,100,100,1,0,1,5,2,2,40,40,{mv},1",
+    f"Style: S,Anton,{fs},&H00FFFFFF,&H00FFFFFF,&H00100B08,&H96000000,0,0,0,0,100,100,1,0,1,5,3,5,50,50,0,1",
     "", "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
 ]
-GREEN_ASS = "&H005EC522&"  # #22c55e in BGR
+GREEN_ASS = "&H5EC522&"  # #22c55e in BGR
+GOLD_ASS = "&H2EB8F5&"   # oro della corona, per "BetForge"
+
+
+def word_size(w, font_k):
+    key = w.lower().strip(".,…!?;:")
+    k = 1.38 if key in EMPHASIS or len(key) >= 8 else (0.72 if len(key) <= 3 else 1.0)
+    return int(fs * k * font_k)
+
+
 events = []
+last_font = None
 for p in phrases:
     ws = words_with_times(p)
     groups = [[]]  # max 3 parole a schermo, e si va a capo dopo la punteggiatura
@@ -110,18 +128,30 @@ for p in phrases:
         groups[-1].append(item)
         if len(groups[-1]) == 3 or item[0][-1] in ".,…!?":
             groups.append([])
-    groups = [g for g in groups if g]
-    for g in groups:
+    for g in (g for g in groups if g):
+        font, font_k = rnd.choice([f for f in FONTS if f[0] != last_font])
+        last_font = font
+        rot = rnd.uniform(-4, 4)
+        dy = rnd.choice([30, -30, 0])   # entra dal basso, dall'alto o "di scatto"
+        dx = rnd.choice([-40, 40, 0]) if dy == 0 else 0
         for j, (w, t0, t1) in enumerate(g):
             end = g[j + 1][1] if j + 1 < len(g) else t1 + 0.15
             parts = []
             for k, (w2, _, _) in enumerate(g):
                 txt = w2.upper().rstrip(",;:")  # stile social: niente virgole
-                if k == j:  # parola detta: verde, "pop" di scala
-                    parts.append(r"{\c" + GREEN_ASS + r"\fscx112\fscy112\t(0,90,\fscx100\fscy100)}" + txt + r"{\c&HFFFFFF&}")
+                size = word_size(w2, font_k)
+                base_col = GOLD_ASS if "betforge" in w2.lower() else "&HFFFFFF&"
+                if k == j:  # parola detta: verde, piu' grande, "pop"
+                    parts.append(r"{\fs%d\c%s\fscx118\fscy118\t(0,110,\fscx100\fscy100)}%s{\fscx100\fscy100}"
+                                 % (size, GREEN_ASS, txt))
                 else:
-                    parts.append(txt)
-            events.append([t0, end, " ".join(parts)])
+                    parts.append(r"{\fs%d\c%s}%s" % (size, base_col, txt))
+            head = r"{\an5\fn%s\frz%.1f" % (font, rot)
+            if j == 0:  # ingresso del gruppo: scivola in posizione con dissolvenza
+                head += r"\move(%d,%d,%d,%d,0,160)\fad(70,0)" % (X + dx, Y + dy, X, Y)
+            else:
+                head += r"\pos(%d,%d)" % (X, Y)
+            events.append([t0, end, head + "}" + " ".join(parts)])
 # nessuna sovrapposizione: ogni evento finisce quando inizia il successivo
 for e, nxt in zip(events, events[1:]):
     e[1] = min(e[1], nxt[0])
@@ -164,20 +194,79 @@ def frame_for(shot, p, t, k):
 
 ass_arg = ass_path.replace("\\", "/").replace(":", r"\:")
 fonts_arg = os.path.join(HERE, "fonts").replace("\\", "/").replace(":", r"\:")
+# --- chiusura con il logo BetForge ---------------------------------------------
+END = 2.8  # secondi di chiusura dopo l'ultima parola
+logo_path = os.path.join(folder, "logo.png")
+
+
+def load_logo():
+    """Logo su sfondo nero -> RGBA (alfa dalla luminosita'), ritagliato sul contenuto."""
+    rgb = Image.open(logo_path).convert("RGB")
+    a = np.asarray(rgb).astype(np.float32)
+    alpha = np.clip((a.max(axis=2) - 18) / 70, 0, 1)
+    rgba = np.dstack([a, alpha * 255]).astype(np.uint8)
+    im = Image.fromarray(rgba, "RGBA")
+    return im.crop(im.getchannel("A").point(lambda v: 255 if v > 20 else 0).getbbox())
+
+
+logo = load_logo() if os.path.exists(logo_path) else None
+lw = int(OUT[0] * (0.78 if fmt == "9x16" else 0.42))
+logo_big = logo.resize((lw, int(lw * logo.height / logo.width)), Image.LANCZOS) if logo else None
+logo_glow = None
+if logo_big:
+    g = np.asarray(logo_big.getchannel("A").filter(ImageFilter.GaussianBlur(22))).astype(np.float32) / 255
+    logo_glow = g[..., None] * GREEN
+BG_DARK = np.array([16, 11, 8], np.float32)[::-1]  # #080b10
+
+
+def end_card(te, last_frame):
+    """te = secondi dall'inizio della chiusura. Sfondo scuro, logo che cresce e appare, alone verde."""
+    W, H = OUT
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    r = np.sqrt(((xx - W / 2) / W) ** 2 + ((yy - H * 0.45) / H) ** 2)
+    canvas = BG_DARK + (1 - np.clip(r * 2.2, 0, 1))[..., None] * np.array([10, 30, 16], np.float32)
+    img = Image.fromarray(np.clip(canvas, 0, 255).astype(np.uint8))
+    if logo_big:
+        q = min(te / 0.7, 1.0)
+        sc = 0.82 + 0.18 * (1 - (1 - q) ** 3)          # ease-out
+        alpha_k = min(te / 0.45, 1.0)
+        lg = logo_big.resize((int(logo_big.width * sc), int(logo_big.height * sc)), Image.LANCZOS)
+        cx, cy = (W - lg.width) // 2, int(H * 0.45 - lg.height / 2)
+        # alone verde che "respira"
+        pulse = 0.35 + 0.25 * math.sin(2 * math.pi * te / 1.6)
+        base = np.asarray(img).astype(np.float32)
+        gl = np.asarray(Image.fromarray(np.clip(logo_glow, 0, 255).astype(np.uint8)).resize((lg.width, lg.height)))
+        gl = gl.astype(np.float32) * pulse * alpha_k
+        y0, x0 = max(cy, 0), max(cx, 0)
+        base[y0:y0 + gl.shape[0], x0:x0 + gl.shape[1]] += gl[:H - y0, :W - x0]
+        img = Image.fromarray(np.clip(base, 0, 255).astype(np.uint8))
+        a = lg.getchannel("A").point(lambda v: int(v * alpha_k))
+        img.paste(lg.convert("RGB"), (cx, cy), a)
+    if te < 0.35 and last_frame is not None:  # dissolvenza dall'ultima inquadratura
+        img = Image.blend(last_frame, img, te / 0.35)
+    return img
+
+
+total = dur + (END if logo else 0)
 ff = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error",
                        "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{OUT[0]}x{OUT[1]}", "-r", str(FPS), "-i", "-",
                        "-i", voice,
                        "-vf", f"ass='{ass_arg}':fontsdir='{fonts_arg}'",
+                       "-af", "apad", "-t", f"{total:.3f}",
                        "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p",
-                       "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart", out_path],
+                       "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", out_path],
                       stdin=subprocess.PIPE)
-n = int(dur * FPS)
-for f in range(n):
+last = None
+for f in range(int(total * FPS)):
     t = f / FPS
+    if t >= dur:
+        ff.stdin.write(end_card(t - dur, last).tobytes())
+        continue
     s = max(i for i in range(len(plan)) if cuts[i] <= t)
     p = ease((t - cuts[s]) / max(cuts[s + 1] - cuts[s], 1e-3))
     k = GLOW * (0.12 + 0.05 * math.sin(2 * math.pi * 0.25 * t) + 0.5 * env[min(f, len(env) - 1)])
-    ff.stdin.write(frame_for(plan[s], p, t, k).tobytes())
+    last = frame_for(plan[s], p, t, k)
+    ff.stdin.write(last.tobytes())
 ff.stdin.close()
 ff.wait()
-print(out_path, f"{dur:.1f}s", "ok" if ff.returncode == 0 else "ERRORE")
+print(out_path, f"{total:.1f}s", "ok" if ff.returncode == 0 else "ERRORE")
