@@ -80,7 +80,7 @@ Comandi: `/help`, `/id`.
 | Chiave | Default | Note |
 |---|---|---|
 | `BACKEND` | `wan` | `kenburns` per test senza IA |
-| `IDLE_MINUTES` | `10` | spegnimento per inattività |
+| `IDLE_MINUTES` | `10` | spegnimento per inattività. Con `0` si spegne circa 30 s dopo l'ultimo video: zero spreco, ma ogni foto successiva riparte da zero |
 | `WAN_MAX_AREA` | `399360` (480×832) | più alto = più dettaglio ma più lento e più memoria |
 | `WAN_FRAMES` / `WAN_FRAMES_LONG` | `73` / `121` | devono essere 4k+1 |
 | `WAN_STEPS` | `30` | |
