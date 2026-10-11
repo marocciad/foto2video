@@ -192,6 +192,30 @@ def test_dispatch_classify_status():
     assert c("risposta strana").startswith("unknown")
 
 
+def test_telegram_client_params():
+    """Il client vero (non il finto): 'timeout' di Telegram non va confuso con quello HTTP."""
+    class Resp:
+        def json(self):
+            return {"ok": True, "result": []}
+
+    class Session:
+        def __init__(self):
+            self.calls = []
+
+        def post(self, url, data=None, json=None, files=None, timeout=None):
+            self.calls.append((url.rsplit("/", 1)[1], json, timeout))
+            return Resp()
+
+    s = Session()
+    tg = w.Telegram("123:abc", session=s)
+    tg.get_updates(7, timeout=30)
+    tg.confirm(8)
+    assert s.calls[0] == ("getUpdates", {"timeout": 30, "limit": 100,
+                                          "allowed_updates": ["message"], "offset": 7}, 45)
+    method, params, http_timeout = s.calls[1]
+    assert params["timeout"] == 0 and params["offset"] == 8 and http_timeout > 0
+
+
 if __name__ == "__main__":
     import tempfile
     test_parse()

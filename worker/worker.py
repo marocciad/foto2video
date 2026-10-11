@@ -120,9 +120,11 @@ class Telegram:
         self.file_base = f"https://api.telegram.org/file/bot{token}"
         self.s = session or requests.Session()
 
-    def call(self, method: str, timeout: float = 60, files=None, **params):
+    def call(self, method: str, http_timeout: float = 60, files=None, **params):
+        # http_timeout e' il timeout della richiesta HTTP; "timeout" e' un parametro
+        # di Telegram (long polling) e va in params insieme agli altri.
         r = self.s.post(f"{self.base}/{method}", data=params if files else None,
-                        json=None if files else params, files=files, timeout=timeout)
+                        json=None if files else params, files=files, timeout=http_timeout)
         data = r.json()
         if not data.get("ok"):
             raise RuntimeError(f"Telegram {method}: {data.get('description')}")
@@ -133,7 +135,7 @@ class Telegram:
                   "allowed_updates": ["message"]}
         if offset is not None:
             params["offset"] = offset
-        return self.call("getUpdates", timeout=timeout + 15, **params)
+        return self.call("getUpdates", http_timeout=timeout + 15, **params)
 
     def confirm(self, offset: int):
         """Conferma a Telegram tutti gli update con id < offset."""
@@ -158,7 +160,7 @@ class Telegram:
 
     def action(self, chat_id: int, action: str = "upload_video"):
         try:
-            self.call("sendChatAction", timeout=10, chat_id=chat_id, action=action)
+            self.call("sendChatAction", http_timeout=10, chat_id=chat_id, action=action)
         except Exception:
             pass
 
@@ -177,7 +179,7 @@ class Telegram:
             if reply_to:
                 params["reply_to_message_id"] = reply_to
                 params["allow_sending_without_reply"] = "true"
-            return self.call("sendVideo", timeout=300,
+            return self.call("sendVideo", http_timeout=300,
                              files={"video": ("video.mp4", f, "video/mp4")}, **params)
 
 
