@@ -66,6 +66,12 @@ kaggle kernels output <user>/foto2video-worker -p out/          # log dell'ultim
 - **Soggetto tipico**: un'immagine generata con un **personaggio inventato con una maschera**, seduto in uno studio. Il soggetto **agisce** (non solo movimenti di camera). La maschera rende superfluo il lip-sync.
 - **Output desiderato**: 720p, **10–30 s**, più formati in base al social (9:16, 16:9, 1:1), **audio** e **sottotitoli animati in stile social** (parola per parola, evidenziati).
 - **Interazione**: prompt in italiano con traduzione automatica in inglese (disattivabile). Sia didascalia libera sia bottoni/preset. Messaggi di conferma e di avanzamento. Foto inviate anche come **file**, a qualità piena.
+- **Testo parlato e sottotitoli**: due modalità. (a) Daniele scrive il testo; (b) il bot propone un testo promozionale partendo da una descrizione. Per (b) serve un LLM piccolo e gratuito su Kaggle (candidato Qwen, Apache 2.0), caricato e poi scaricato prima di Wan.
+- **Voce**: **robotica/camuffata**, come una voce alterata per non farsi riconoscere. Si ottiene con TTS + effetti ffmpeg (pitch, ring-mod/vocoder, flanger).
+- **Musica**: niente nel video, Daniele la aggiunge dopo nell'app del social.
+- **Stile grafico**: verde BetForge `#22c55e` per la parola evidenziata (lo sfondo dell'app è `#080b10`).
+- **Logo / call-to-action finale**: non ora, ma va previsto come **opzione** disattivata di default.
+- **App da promuovere**: BetForge, analisi e pronostici calcistici. ⚠️ In Italia il Decreto Dignità vieta la pubblicità del gioco con vincite in denaro, e i social hanno policy restrittive su scommesse e pronostici: segnalato a Daniele, che deve verificare.
 - **Vincoli**: tutto gratis per ora. Telegram ora, app Flutter in futuro. Nessun archivio oltre alla chat.
 
 ## Roadmap (in ordine di valore)
@@ -74,7 +80,7 @@ kaggle kernels output <user>/foto2video-worker -p out/          # log dell'ultim
 2. **Cache del modello**: implementata (`model_cache/build_cache.py`) ma **non collaudata**. Da verificare: che `--dir-mode zip` venga estratto in cartelle su `/kaggle/input`, lo spazio disco in `/tmp` durante la build (circa 45 GB di picco) e i tempi reali di avvio.
 3. **Formati**: tag `#verticale`/`#orizzontale`/`#quadrato` e bottoni. Wan genera direttamente nell'aspect ratio scelto, senza crop.
 4. **Video lunghi (10–30 s)**: catena di clip di circa 5 s, ognuna partendo dall'ultimo fotogramma della precedente, poi concatenate. Per la quota conviene generare a 480p e fare upscale a 720p dopo.
-5. **Voce + sottotitoli animati**: testo della voce fuori campo → TTS italiano (candidato Kokoro-82M, Apache 2.0) → timestamp per parola (faster-whisper) → sottotitoli ASS in stile social, impressi nel video con ffmpeg/libass. Font OFL (es. Montserrat ExtraBold).
+5. **Voce + sottotitoli animati** (nota: oggi `finalize_mp4` usa `-an` e toglie l'audio, va cambiato): testo della voce fuori campo → TTS italiano (candidato Kokoro-82M, Apache 2.0) → timestamp per parola (faster-whisper) → sottotitoli ASS in stile social, impressi nel video con ffmpeg/libass. Font OFL (es. Montserrat ExtraBold).
 6. **Prompt IT→EN** automatico (candidato opus-mt-it-en su CPU), con eventuale "arricchimento" del prompt.
 7. **Post-produzione**: interpolazione a 48/60 fps (RIFE), upscale, musica opzionale (royalty-free, o aggiunta direttamente nell'app del social).
 8. **Personaggio ricorrente**: per ora basta la stessa immagine di partenza. LoRA solo se la coerenza tra clip non basta.
