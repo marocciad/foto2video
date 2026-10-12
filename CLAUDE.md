@@ -64,9 +64,10 @@ kaggle kernels output <user>/foto2video-worker -p out/          # log dell'ultim
 
 ## Stato
 
-- ✅ Logica bot, dispatcher, backend Ken Burns: testati.
-- ⚠️ **Mai eseguito su GPU reale.** Il backend Wan è scritto sul sorgente di diffusers (main, ottobre 2026) ma va collaudato su Kaggle.
-  Primo collaudo: `BACKEND=kenburns` → catena ok → `BACKEND=wan`. Poi leggi i log con `kaggle kernels output`.
+- ✅ Logica bot, dispatcher, backend Ken Burns: testati e collaudati su Kaggle (2026-10-11).
+- ✅ **Studio collaudato su GitHub Actions** (2026-10-12): vocale di 19 s + copione → 9:16 e 16:9 in circa 2 min 45 s dall'avvio del workflow (installazione 30 s, montaggio 126 s). Wan è stato collaudato su 2×T4 (circa 16 min a sessione senza cache), ma per questo formato non serve.
+- ⏳ Da fare: cron-job.org per avvii puntuali (il cron di GitHub è partito con ore di ritardo); logo ad alta risoluzione.
+- Wan su Kaggle: funziona (2 GPU, fp16), ma fa sorridere la maschera e deforma l'armatura. Corretti `torchao` vecchio e il fallback in caso di errore di caricamento.
 - Rischi da verificare al collaudo: qualità in FP8 storage (disattivabile con `WAN_FP8=false`), UMT5 in fp16 (possibili NaN → `WAN_DTYPE=bf16`), output nero in fp16 (→ `WAN_DTYPE=bf16`), OOM (→ `WAN_MAX_AREA` più basso), `from_pretrained(text_encoder=None, tokenizer=None)` sul ramo a 2 GPU, valore di `machine_shape` accettato dalla CLI, tempo reale per clip.
 
 ## Obiettivo d'uso (risposte di Daniele, 2026-10-11)
