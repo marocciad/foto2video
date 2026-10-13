@@ -73,6 +73,8 @@ Il formato principale per i video promozionali. **Non usa la GPU**: gira su GitH
 
 Tag nel testo: `#verticale`, `#orizzontale` o `#quadrato` (un solo formato), `#nointro`.
 
+**Senza registrare:** manda solo il testo con `#voce`. Lo legge una voce sintetica (Kokoro-82M, Apache 2.0) con lo stesso effetto metallico, e "BetForge" è pronunciato da una voce inglese. Il lavoro parte subito e l'intro resta la tua registrazione.
+
 ### Il personaggio (asset privati)
 
 Immagini, logo, intro e inquadrature stanno in `personaggi/<nome>/`, cartella **esclusa da git**. Si caricano in un dataset Kaggle privato:
@@ -145,6 +147,7 @@ Comandi: `/help`, `/id`.
 ```
 studio/                   regia virtuale: vocale -> video (gira su GitHub Actions, CPU)
   audio.py                pulizia, voce camuffata, volume, trascrizione, allineamento al copione
+  tts.py                  voce sintetica per #voce (Kokoro, "BetForge" con voce inglese)
   regia.py                inquadrature, bagliore, sottotitoli cinetici, logo finale
   __main__.py             legge la coda Telegram (vocali + copioni) e monta i video
   fonts/                  5 font OFL (licenze incluse)

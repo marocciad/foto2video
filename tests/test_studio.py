@@ -204,3 +204,29 @@ def test_audio_chain(tmp_path):
     audio.voice3(both, wet)
     assert abs(audio.measure_lufs(wet) + 13) < 2.0
     assert np.abs(audio.load_pcm(wet)).max() < 0.9
+
+
+# --- voce sintetica (#voce) -----------------------------------------------------
+
+def test_tts_text_starts_immediately_and_is_not_paired():
+    jobs = bot.plan_queue([text(1, NOW - 5, "Ciao a tutti #voce"), voice(2, NOW - 3)], {ME}, NOW)
+    assert jobs[0]["tipo"] == "video" and jobs[0]["voce"] is None and jobs[0]["ids"] == [1]
+    assert len(jobs) == 1  # il vocale appena arrivato aspetta il suo copione, non usa quello con #voce
+
+
+def test_tts_segments_brand_in_english():
+    from studio import tts
+    segs = tts.segments("Benvenuti... questo è BetForge. BetForge trasforma i dati.")
+    assert [(lang, t) for lang, t, _ in segs] == [
+        ("it", "Benvenuti…"), ("it", "questo è"), ("en", "BetForge"), ("en", "BetForge"),
+        ("it", "trasforma i dati.")]
+    assert segs[0][2] == tts.PAUSE_SUSPENDED and segs[1][2] == tts.GAP_WORD
+
+
+def test_tts_synthesis(tmp_path):
+    import pytest
+    pytest.importorskip("kokoro")
+    from studio import tts
+    out = os.path.join(str(tmp_path), "tts.wav")
+    tts.synthesize("Questo è BetForge.", out)
+    assert len(audio.load_pcm(out)) / 48000 > 0.5

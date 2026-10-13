@@ -7,7 +7,8 @@ CHARACTER (sottocartella del personaggio, default "betforge"), WHISPER_MODEL (de
 
 Uso dal bot: si manda un **vocale** con il contenuto e, per avere sottotitoli esatti, il
 **copione** come messaggio di testo (prima o dopo il vocale, entro 10 minuti).
-Tag nel copione: #verticale / #orizzontale / #quadrato (un solo formato), #nointro (senza intro).
+Tag nel copione: #verticale / #orizzontale / #quadrato (un solo formato), #nointro (senza intro),
+#voce (niente vocale: il testo lo legge la voce sintetica, e il lavoro parte subito).
 Le foto non si toccano: restano in coda per il worker su Kaggle.
 """
 
@@ -32,6 +33,7 @@ HELP = ("🎬 *Studio BetForge*\n\n"
         "(prima o dopo, entro 10 minuti).\n\n"
         "Ricevi il video in 9:16, 16:9 e 1:1 in circa 5–10 minuti.\n"
         "Nel testo puoi aggiungere `#verticale`, `#orizzontale` o `#quadrato` (un solo formato) e `#nointro`.\n"
+        "Niente vocale? Scrivi il testo con `#voce` e lo legge la voce sintetica.\n"
         "Le *foto* con didascalia vanno ancora al generatore IA su GPU.")
 
 
@@ -47,6 +49,8 @@ def kind(msg: dict) -> str:
     text = (msg.get("text") or "").strip()
     if text.startswith("/"):
         return "command"
+    if re.search(r"(?i)#voce\b", text):
+        return "tts"  # testo da leggere con la voce sintetica: niente vocale da aspettare
     return "text" if text else "other"
 
 
@@ -90,12 +94,15 @@ def plan_queue(updates: list, allowed: set, now: float) -> list:
                 break  # il copione potrebbe arrivare tra poco
             tid, t = pair.get(uid, (None, None))
             jobs.append({"tipo": "video", "voce": m, "copione": t, "ids": [uid] + ([tid] if tid else [])})
+        elif k == "tts":
+            jobs.append({"tipo": "video", "voce": None, "copione": m, "ids": [uid]})
         elif k == "text":
             if now - m.get("date", now) < WAIT_TEXT:
                 break  # copione in attesa del suo vocale
             jobs.append({"tipo": "risposta", "msg": m, "ids": [uid],
                          "testo": "📝 Ho ricevuto un testo ma nessun vocale entro 15 minuti. "
-                                  "Rimanda il testo insieme al vocale."})
+                                  "Rimanda il testo insieme al vocale, oppure aggiungi #voce "
+                                  "e lo leggo con la voce sintetica."})
         elif k == "command":
             name = m["text"].split()[0][1:].split("@")[0].lower()
             reply = f"Il tuo ID Telegram è: {user}" if name == "id" else HELP
@@ -184,20 +191,31 @@ class Telegram:
 def make_video(tg: Telegram, job: dict, assets: str, whisper_model: str):
     from studio import audio, regia  # import pigro: numpy/Pillow/whisper servono solo qui
 
-    voice = job["voce"]
-    chat, mid = voice["chat"]["id"], voice["message_id"]
+    voice = job["voce"]  # None = voce sintetica dal copione
+    src = voice or job["copione"]
+    chat, mid = src["chat"]["id"], src["message_id"]
     script, formats, no_intro = parse_tags((job["copione"] or {}).get("text", ""))
-    status = tg.send(chat, "🎙️ Vocale ricevuto" + (" con il testo" if script else "")
-                     + ": preparo il video (circa 5–10 minuti)…", reply_to=mid)
+    if voice:
+        intro_msg = "🎙️ Vocale ricevuto" + (" con il testo" if script else "")
+    else:
+        intro_msg = "🗣️ Testo ricevuto: lo leggo con la voce sintetica"
+    status = tg.send(chat, intro_msg + ": preparo il video (circa 5–10 minuti)…", reply_to=mid)
     t0 = time.time()
     work = tempfile.mkdtemp(prefix="studio_")
     try:
         character = regia.load_character(assets)
-        tg.edit(chat, status, "🔊 Pulisco l'audio e applico la voce…")
-        v = voice.get("voice") or voice.get("audio")
-        raw = tg.download(v["file_id"], os.path.join(work, "vocale.ogg"))
         content = os.path.join(work, "contenuto.wav")
-        audio.clean(raw, content)
+        if voice:
+            tg.edit(chat, status, "🔊 Pulisco l'audio e applico la voce…")
+            v = voice.get("voice") or voice.get("audio")
+            raw = tg.download(v["file_id"], os.path.join(work, "vocale.ogg"))
+            audio.clean(raw, content)
+        else:
+            if not script:
+                raise RuntimeError("il messaggio con #voce non contiene testo da leggere")
+            tg.edit(chat, status, "🗣️ Genero la voce sintetica…")
+            from studio import tts  # import pigro: kokoro/torch servono solo qui
+            tts.synthesize(script, content)
         parts = [content]
         intro = os.path.join(assets, character.get("intro", ""))
         if not no_intro and character.get("intro") and os.path.exists(intro):

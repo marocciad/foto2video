@@ -47,6 +47,7 @@ dispatcher/dispatch.py ── GitHub Actions cron */10: se kernel non attivo e c
 | Coda studio: conferma solo il **prefisso contiguo** gestito (`confirm_offset`) | Telegram conferma tutto ciò che sta prima dell'offset: vocale e copione possono non essere adiacenti |
 | Vocale senza copione: attesa di 90 s; copione senza vocale: attesa di 15 min | il copione può arrivare dopo il vocale, e registrare richiede tempo |
 | Sottotitoli: testo dal copione, tempi da whisper (`align_script`) | whisper sbaglia qualche parola ("matematico", "gol a test"); il copione è esatto |
+| `#voce`: testo letto da Kokoro su Actions (CPU), intro sempre registrata | per quando Daniele non può registrare. "BetForge" sintetizzato con `am_onyx` e incollato nella frase (`tts.segments`). Kokoro/torch-cpu installati solo se `tts=1` |
 | Whisper `small` su Actions | con il copione bastano i tempi, e `small` è circa 10 volte più veloce di `medium` |
 | Cache modello come dataset Kaggle (`model_cache/`), rilevata in automatico da `find_local_model()` | evita circa 30 GB di download a sessione |
 
