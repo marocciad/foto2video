@@ -16,7 +16,7 @@ worker/worker.py ── gira su Kaggle (T4), long polling, genera, si spegne dop
 dispatcher/dispatch.py ── GitHub Actions cron */10: se kernel non attivo e ci sono foto → push
 ```
 
-- **Studio** (`studio/`, il formato principale): stesso workflow del dispatcher. Se la coda non inizia con una foto, `dispatch.py` scrive `action=studio` e il workflow installa ffmpeg e whisper, scarica gli asset privati (dataset Kaggle `foto2video-assets`) e lancia `python -m studio`. Lo studio monta vocale (+ copione) → video in 9:16 e 16:9 su CPU, e si ferma alla prima foto, che resta per Kaggle.
+- **Studio** (`studio/`, il formato principale): stesso workflow del dispatcher. Se la coda non inizia con una foto, `dispatch.py` scrive `action=studio` e il workflow installa ffmpeg e whisper, scarica gli asset privati (dataset Kaggle `foto2video-assets`) e lancia `python -m studio`. Lo studio monta vocale (+ copione) → video in 9:16, 16:9 e 1:1 su CPU, e si ferma alla prima foto, che resta per Kaggle.
 - Nessun database: la coda è Telegram stesso. Firebase scartato perché Storage/Functions richiedono il piano Blaze.
 - `worker.py` deve restare **un unico file**, perché Kaggle `kernel_type: script` esegue un solo `code_file`. Il workflow lo copia in `kaggle/` prima del push.
 - Le dipendenze pesanti (torch, diffusers) si importano **solo dentro** `WanBackend`, così i test girano senza GPU.

@@ -7,7 +7,7 @@ CHARACTER (sottocartella del personaggio, default "betforge"), WHISPER_MODEL (de
 
 Uso dal bot: si manda un **vocale** con il contenuto e, per avere sottotitoli esatti, il
 **copione** come messaggio di testo (prima o dopo il vocale, entro 10 minuti).
-Tag nel copione: #verticale / #orizzontale (un solo formato), #nointro (senza intro).
+Tag nel copione: #verticale / #orizzontale / #quadrato (un solo formato), #nointro (senza intro).
 Le foto non si toccano: restano in coda per il worker su Kaggle.
 """
 
@@ -30,8 +30,8 @@ HELP = ("🎬 *Studio BetForge*\n\n"
         "1. Manda un *vocale* con il testo da dire.\n"
         "2. Per sottotitoli perfetti manda anche il *testo* del vocale come messaggio "
         "(prima o dopo, entro 10 minuti).\n\n"
-        "Ricevi il video in 9:16 e 16:9 in circa 5–10 minuti.\n"
-        "Nel testo puoi aggiungere `#verticale` o `#orizzontale` (un solo formato) e `#nointro`.\n"
+        "Ricevi il video in 9:16, 16:9 e 1:1 in circa 5–10 minuti.\n"
+        "Nel testo puoi aggiungere `#verticale`, `#orizzontale` o `#quadrato` (un solo formato) e `#nointro`.\n"
         "Le *foto* con didascalia vanno ancora al generatore IA su GPU.")
 
 
@@ -119,11 +119,11 @@ def confirm_offset(all_ids: list, handled: set):
 def parse_tags(text: str) -> tuple:
     tags = {t.lower() for t in re.findall(r"#(\w+)", text or "")}
     clean = re.sub(r"#\w+", "", text or "").strip()
-    formats = ["9x16", "16x9"]
-    if "verticale" in tags:
-        formats = ["9x16"]
-    elif "orizzontale" in tags:
-        formats = ["16x9"]
+    formats = ["9x16", "16x9", "1x1"]
+    for tag, fmt in (("verticale", "9x16"), ("orizzontale", "16x9"), ("quadrato", "1x1")):
+        if tag in tags:
+            formats = [fmt]
+            break
     return clean, formats, "nointro" in tags
 
 
@@ -222,7 +222,7 @@ def make_video(tg: Telegram, job: dict, assets: str, whisper_model: str):
             raise RuntimeError("non ho riconosciuto parole nel vocale")
         emphasis = {w.lower() for w in character.get("enfasi", [])}
 
-        for fmt in formats:
+        for fmt in (f for f in formats if f in character["inquadrature"]):
             tg.edit(chat, status, f"🎬 Monto il video {fmt.replace('x', ':')}…")
             out = os.path.join(work, f"video_{fmt}.mp4")
             r = regia.Renderer(assets, character, fmt)

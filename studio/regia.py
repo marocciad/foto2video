@@ -8,7 +8,8 @@ Il personaggio e' descritto da `personaggio.json` (nel dataset privato degli ass
       "enfasi": ["betforge", "numeri", ...],
       "inquadrature": {
         "9x16": [[immagine, cx, cy, altezza, zoom0, zoom1, deriva_x, "crop"|"fit"], ...],
-        "16x9": [...]
+        "16x9": [...],
+        "1x1": [...]
       }
     }
 Le prime due inquadrature sono dell'intro, l'ultima e' la chiusura, quelle in mezzo ruotano.
@@ -34,7 +35,8 @@ GREEN_ASS = "&H5EC522&"                          # stessi colori in BGR per ASS
 GOLD_ASS = "&H2EB8F5&"                           # oro della corona, per "BetForge"
 FONTS = [("Anton", 1.0), ("Bebas Neue", 1.18), ("Archivo Black", 0.82), ("Russo One", 0.85),
          ("Black Ops One", 0.85)]
-SIZES = {"9x16": (720, 1280), "16x9": (1280, 720)}
+SIZES = {"9x16": (720, 1280), "16x9": (1280, 720), "1x1": (1080, 1080)}
+LOGO_WIDTH = {"9x16": 0.78, "16x9": 0.42, "1x1": 0.60}  # frazione della larghezza del video
 END = 2.8  # secondi di chiusura con il logo
 
 
@@ -164,7 +166,7 @@ class Renderer:
         self.logo = self.logo_glow = None
         if os.path.exists(logo_path):
             lg = _load_logo(logo_path)
-            lw = int(self.size[0] * (0.78 if fmt == "9x16" else 0.42))
+            lw = int(self.size[0] * LOGO_WIDTH[fmt])
             self.logo = lg.resize((lw, int(lw * lg.height / lg.width)), Image.LANCZOS)
             g = np.asarray(self.logo.getchannel("A").filter(ImageFilter.GaussianBlur(22))).astype(np.float32)
             self.logo_glow = (g / 255)[..., None] * GREEN
@@ -228,7 +230,8 @@ class Renderer:
         cuts = cut_times(phrases, dur)
         ass_path = out_path + ".ass"
         with open(ass_path, "w", encoding="utf-8") as f:
-            f.write(build_ass(phrases, self.size, self.fmt == "9x16", emphasis))
+            # il quadrato impagina i sottotitoli come il verticale (in proporzione alla larghezza)
+            f.write(build_ass(phrases, self.size, self.fmt != "16x9", emphasis))
         esc = lambda p: p.replace("\\", "/").replace(":", r"\:")  # noqa: E731 - filtri ffmpeg su Windows
         total = dur + (END if self.logo is not None else 0)
         W, H = self.size

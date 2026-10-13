@@ -79,7 +79,8 @@ def test_confirm_offset_only_contiguous_prefix():
 def test_parse_tags():
     assert bot.parse_tags("Ciao #verticale") == ("Ciao", ["9x16"], False)
     assert bot.parse_tags("#nointro Ciao")[2] is True
-    assert bot.parse_tags("")[1] == ["9x16", "16x9"]
+    assert bot.parse_tags("")[1] == ["9x16", "16x9", "1x1"]
+    assert bot.parse_tags("Ciao #quadrato")[1] == ["1x1"]
 
 
 # --- parole e frasi ---------------------------------------------------------------
@@ -144,7 +145,7 @@ def _fake_assets(d):
     logo.save(os.path.join(d, "logo.png"))
     shots = [["largo.png", 160, 90, 180, 1, 1.1, 0, "crop"], ["largo.png", 160, 90, 180, 1, 1, 0, "fit"],
              ["alto.png", 90, 160, 320, 1, 1.1, 0, "crop"], ["largo.png", 160, 90, 180, 1.1, 1, 0, "crop"]]
-    cfg = {"logo": "logo.png", "inquadrature": {"9x16": shots, "16x9": shots}}
+    cfg = {"logo": "logo.png", "inquadrature": {"9x16": shots, "16x9": shots, "1x1": shots}}
     with open(os.path.join(d, "personaggio.json"), "w", encoding="utf-8") as f:
         json.dump(cfg, f)
     return cfg
@@ -154,6 +155,20 @@ def _duration(path):
     out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
                          capture_output=True, text=True).stdout
     return float(out)
+
+
+def test_render_square(tmp_path):
+    d = str(tmp_path)
+    _fake_assets(d)
+    wav = os.path.join(d, "voce.wav")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+                    "sine=f=220:d=1.0:sample_rate=48000", "-ac", "1", wav], check=True)
+    out = os.path.join(d, "q.mp4")
+    r = regia.Renderer(d, regia.load_character(d), "1x1", size=(240, 240))
+    r.render(wav, audio.split_phrases([W("Ciao", 0.1, 0.5), W("BetForge.", 0.6, 0.9)]), out, set(), fps=10)
+    size = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                           "stream=width,height", "-of", "csv=p=0", out], capture_output=True, text=True).stdout
+    assert size.strip() == "240,240"
 
 
 def test_render_end_to_end(tmp_path):

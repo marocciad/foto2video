@@ -69,9 +69,9 @@ Il formato principale per i video promozionali. **Non usa la GPU**: gira su GitH
 1. Manda al bot un **vocale** con il testo da dire.
 2. Per sottotitoli perfetti manda anche il **testo** del vocale come messaggio, prima o dopo, entro 10 minuti.
    - Se manca il testo, il bot aspetta 90 s e poi usa la trascrizione automatica, che può sbagliare qualche parola.
-3. Ricevi il video in **9:16** e **16:9**: intro registrata, stacchi di inquadratura su ogni frase, voce camuffata, sottotitoli animati e logo finale.
+3. Ricevi il video in **9:16**, **16:9** e **1:1**: intro registrata, stacchi di inquadratura su ogni frase, voce camuffata, sottotitoli animati e logo finale.
 
-Tag nel testo: `#verticale` o `#orizzontale` (un solo formato), `#nointro`.
+Tag nel testo: `#verticale`, `#orizzontale` o `#quadrato` (un solo formato), `#nointro`.
 
 ### Il personaggio (asset privati)
 
