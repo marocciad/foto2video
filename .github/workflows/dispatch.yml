@@ -72,7 +72,11 @@ jobs:
       - name: Studio · modello per i copioni (solo per #idea)
         if: steps.dispatch.outputs.action == 'studio' && steps.dispatch.outputs.llm == '1'
         run: |
-          pip install --quiet --only-binary=:all: llama-cpp-python huggingface_hub
+          # PyPI non ha ruote Linux precompilate: indice CPU del progetto, altrimenti compilazione (lenta)
+          pip install --quiet huggingface_hub
+          pip install --quiet --only-binary=:all: llama-cpp-python \
+            --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
+            || pip install --quiet llama-cpp-python
 
       - name: Studio · cache del modello per i copioni
         if: steps.dispatch.outputs.action == 'studio' && steps.dispatch.outputs.llm == '1'
