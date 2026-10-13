@@ -27,14 +27,32 @@ PAIR_WINDOW = 600     # s: distanza massima tra vocale e copione
 WAIT_VOICE = 90       # s: un vocale senza copione aspetta un po', il copione potrebbe arrivare dopo
 WAIT_TEXT = 900       # s: un copione senza vocale aspetta il vocale (registrare richiede tempo)
 
+# Testi dei comandi (Markdown di Telegram). I tag in `codice` si copiano con un tocco.
 HELP = ("🎬 *Studio BetForge*\n\n"
-        "1. Manda un *vocale* con il testo da dire.\n"
-        "2. Per sottotitoli perfetti manda anche il *testo* del vocale come messaggio "
-        "(prima o dopo, entro 10 minuti).\n\n"
-        "Ricevi il video in 9:16, 16:9 e 1:1 in circa 5–10 minuti.\n"
-        "Nel testo puoi aggiungere `#verticale`, `#orizzontale` o `#quadrato` (un solo formato) e `#nointro`.\n"
-        "Niente vocale? Scrivi il testo con `#voce` e lo legge la voce sintetica.\n"
+        "*Video con la tua voce*\n"
+        "1. Manda il *testo* del copione.\n"
+        "2. Manda il *vocale* con lo stesso testo (prima o dopo, entro 10 minuti).\n"
+        "Dopo qualche minuto ricevi il video in 9:16, 16:9 e 1:1.\n\n"
+        "*Senza registrare*: manda solo il testo con `#voce` in fondo.\n\n"
+        "*Opzioni* (tocca per copiare, poi incolla in fondo al testo):\n"
+        "`#verticale` · `#orizzontale` · `#quadrato` · `#voce` · `#nointro`\n\n"
+        "Altri comandi: /formati · /voce · /id\n"
         "Le *foto* con didascalia vanno ancora al generatore IA su GPU.")
+FORMATS_HELP = ("📐 *Formati*\n\n"
+                "Senza tag ricevi tutti e tre. Con un tag ne ricevi uno solo:\n"
+                "• 9:16 per Reels, TikTok, Shorts → `#verticale`\n"
+                "• 16:9 per YouTube → `#orizzontale`\n"
+                "• 1:1 per i post di Instagram e Facebook → `#quadrato`\n\n"
+                "Scrivi il tag in fondo al testo del copione.")
+VOICE_HELP = ("🗣️ *Video senza registrare*\n\n"
+              "Manda solo il testo con `#voce` in fondo, per esempio:\n"
+              "`Tu guardi la partita. Io guardo i numeri. #voce`\n\n"
+              "Lo legge la voce sintetica con lo stesso effetto metallico, e il video parte subito.\n"
+              "L'intro resta la tua registrazione: aggiungi `#nointro` per toglierla.")
+# Menu dei comandi (pulsante "Menu" accanto alla tastiera): lo registra setup/bot_menu.py
+COMMANDS = [("help", "Come si usa"), ("formati", "Formati e tag"),
+            ("voce", "Video senza registrare (voce sintetica)"), ("id", "Il tuo ID Telegram")]
+COMMAND_TEXTS = {"start": HELP, "help": HELP, "aiuto": HELP, "formati": FORMATS_HELP, "voce": VOICE_HELP}
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +123,7 @@ def plan_queue(updates: list, allowed: set, now: float) -> list:
                                   "e lo leggo con la voce sintetica."})
         elif k == "command":
             name = m["text"].split()[0][1:].split("@")[0].lower()
-            reply = f"Il tuo ID Telegram è: {user}" if name == "id" else HELP
+            reply = f"Il tuo ID Telegram è: {user}" if name == "id" else COMMAND_TEXTS.get(name, HELP)
             jobs.append({"tipo": "risposta", "msg": m, "testo": reply, "ids": [uid], "markdown": name != "id"})
         else:
             jobs.append({"tipo": "ignora", "ids": [uid]})

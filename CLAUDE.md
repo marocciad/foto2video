@@ -57,6 +57,7 @@ dispatcher/dispatch.py ── GitHub Actions cron */10: se kernel non attivo e c
 pip install -r requirements-dev.txt     # serve anche ffmpeg nel PATH
 pytest -q                               # test senza rete (Telegram finto, ffmpeg reale; lo studio richiede ffmpeg con rubberband e libass)
 py -3.12 setup/push_assets.py           # carica personaggi/ nel dataset privato foto2video-assets
+python setup/bot_menu.py                # menu comandi + descrizione del bot su Telegram (testi in studio/__main__.py)
 py -3.12 setup/push_secrets.py          # crea/aggiorna il dataset privato dei secrets (serve Python >= 3.11)
 cp worker/worker.py kaggle/ && kaggle kernels push -p kaggle   # avvio manuale del worker
 kaggle kernels status <user>/foto2video-worker

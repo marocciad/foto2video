@@ -70,6 +70,15 @@ def test_strangers_and_commands():
     assert jobs[1]["testo"] == f"Il tuo ID Telegram è: {ME}"
 
 
+def test_menu_commands_have_texts():
+    jobs = bot.plan_queue([text(1, NOW, "/formati"), text(2, NOW, "/voce@foto2videobot"), text(3, NOW, "/start")],
+                          {ME}, NOW)
+    assert [j["testo"] for j in jobs] == [bot.FORMATS_HELP, bot.VOICE_HELP, bot.HELP]
+    assert all(j["markdown"] for j in jobs)
+    # ogni comando del menu ha una risposta (id a parte, che e' dinamico)
+    assert {c for c, _ in bot.COMMANDS} - {"id"} <= set(bot.COMMAND_TEXTS)
+
+
 def test_confirm_offset_only_contiguous_prefix():
     assert bot.confirm_offset([5, 6, 7], {5, 7}) == 6
     assert bot.confirm_offset([5, 6, 7], {5, 6, 7}) == 8

@@ -75,6 +75,14 @@ Tag nel testo: `#verticale`, `#orizzontale` o `#quadrato` (un solo formato), `#n
 
 **Senza registrare:** manda solo il testo con `#voce`. Lo legge una voce sintetica (Kokoro-82M, Apache 2.0) con lo stesso effetto metallico, e "BetForge" è pronunciato da una voce inglese. Il lavoro parte subito e l'intro resta la tua registrazione.
 
+### Menu del bot
+
+```bash
+python setup/bot_menu.py
+```
+
+Registra il pulsante **Menu** (`/help`, `/formati`, `/voce`, `/id`) e la descrizione del bot. Si rilancia quando cambiano i comandi o i testi in `studio/__main__.py`.
+
 ### Il personaggio (asset privati)
 
 Immagini, logo, intro e inquadrature stanno in `personaggi/<nome>/`, cartella **esclusa da git**. Si caricano in un dataset Kaggle privato:
