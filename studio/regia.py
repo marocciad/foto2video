@@ -218,7 +218,9 @@ class Renderer:
             img = Image.blend(last, img, te / 0.35)
         return img
 
-    def render(self, voice_wav: str, phrases: list, out_path: str, emphasis: set, fps: int = 30):
+    def render(self, voice_wav: str, phrases: list, out_path: str, emphasis: set, fps: int = 30,
+               subtitles: bool = True):
+        """subtitles=False: niente sottotitoli ASS (li disegna l'overlay HyperFrames, vedi grafica.py)."""
         wav = load_pcm(voice_wav)
         dur = len(wav) / 48000
         hop = 48000 // fps
@@ -229,17 +231,19 @@ class Renderer:
         shots = assign_shots(len(phrases), self.plan)
         cuts = cut_times(phrases, dur)
         ass_path = out_path + ".ass"
-        with open(ass_path, "w", encoding="utf-8") as f:
-            # il quadrato impagina i sottotitoli come il verticale (in proporzione alla larghezza)
-            f.write(build_ass(phrases, self.size, self.fmt != "16x9", emphasis))
-        esc = lambda p: p.replace("\\", "/").replace(":", r"\:")  # noqa: E731 - filtri ffmpeg su Windows
+        vf = []
+        if subtitles:
+            with open(ass_path, "w", encoding="utf-8") as f:
+                # il quadrato impagina i sottotitoli come il verticale (in proporzione alla larghezza)
+                f.write(build_ass(phrases, self.size, self.fmt != "16x9", emphasis))
+            vf = ["-vf", ass_filter(ass_path)]
         total = dur + (END if self.logo is not None else 0)
         W, H = self.size
         ff = subprocess.Popen(
             ["ffmpeg", "-y", "-loglevel", "error",
              "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(fps), "-i", "-",
              "-i", voice_wav,
-             "-vf", f"ass='{esc(ass_path)}':fontsdir='{esc(FONTS_DIR)}'",
+             *vf,
              "-af", "apad", "-t", f"{total:.3f}",
              "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p",
              "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", out_path],
@@ -263,5 +267,23 @@ class Renderer:
         err = ff.stderr.read().decode(errors="replace")
         if ff.wait() != 0:
             raise RuntimeError(f"ffmpeg (regia) fallito: {err[-600:]}")
-        os.remove(ass_path)
+        if subtitles:
+            os.remove(ass_path)
         return total
+
+    def burn_subtitles(self, video: str, phrases: list, out_path: str, emphasis: set):
+        """Riserva: imprime i sottotitoli ASS su un video gia' montato senza sottotitoli."""
+        ass_path = out_path + ".ass"
+        with open(ass_path, "w", encoding="utf-8") as f:
+            f.write(build_ass(phrases, self.size, self.fmt != "16x9", emphasis))
+        p = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", video, "-vf", ass_filter(ass_path),
+                            "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p",
+                            "-c:a", "copy", "-movflags", "+faststart", out_path], capture_output=True, text=True)
+        os.remove(ass_path)
+        if p.returncode != 0:
+            raise RuntimeError(f"ffmpeg (sottotitoli) fallito: {p.stderr[-600:]}")
+
+
+def ass_filter(ass_path: str) -> str:
+    esc = lambda p: p.replace("\\", "/").replace(":", r"\:")  # noqa: E731 - filtri ffmpeg su Windows
+    return f"ass='{esc(ass_path)}':fontsdir='{esc(FONTS_DIR)}'"

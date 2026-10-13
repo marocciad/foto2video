@@ -1,0 +1,16 @@
+{
+  "id": "danielemaroccia/foto2video-mani",
+  "title": "foto2video-mani",
+  "code_file": "genera_mani.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "machine_shape": "NvidiaTeslaT4",
+  "dataset_sources": ["danielemaroccia/foto2video-assets"],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

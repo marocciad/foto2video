@@ -1,0 +1,225 @@
+<!doctype html>
+<!-- Grafiche animate dello studio (HyperFrames): contatori, barre, rating, forma, chiusura con logo.
+     Lo studio sostituisce __W__, __H__, __DUR__ e __CONFIG__ e lo rende con sfondo trasparente.
+     Le grafiche stanno nella parte alta del video: la parte bassa e' dei sottotitoli. -->
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=__W__, height=__H__" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: "Anton"; src: url("fonts/Anton-Regular.ttf"); }
+      @font-face { font-family: "Bebas Neue"; src: url("fonts/BebasNeue-Regular.ttf"); }
+      @font-face { font-family: "Archivo Black"; src: url("fonts/ArchivoBlack-Regular.ttf"); }
+      @font-face { font-family: "Russo One"; src: url("fonts/RussoOne-Regular.ttf"); }
+      @font-face { font-family: "Black Ops One"; src: url("fonts/BlackOpsOne-Regular.ttf"); }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: __W__px; height: __H__px; overflow: hidden; background: transparent; }
+      #root {
+        --green: #22c55e; --gold: #f5b82e; --ink: #f5f5f7; --glass: rgba(8, 11, 16, 0.78);
+        position: relative; width: 100%; height: 100%; overflow: hidden;
+        font-family: "Bebas Neue", sans-serif; color: var(--ink);
+      }
+      .card {
+        position: absolute; left: 50%; opacity: 0;
+        padding: calc(var(--u) * 2.2) calc(var(--u) * 3);
+        background: var(--glass); border: 1px solid rgba(34, 197, 94, 0.45);
+        border-radius: calc(var(--u) * 1.6);
+        box-shadow: 0 0 calc(var(--u) * 4) rgba(34, 197, 94, 0.25);
+        transform: translateX(-50%);
+      }
+      .kicker { font-size: calc(var(--u) * 3.4); letter-spacing: 0.08em; color: var(--green); }
+      .big {
+        font-family: "Anton", sans-serif; font-size: calc(var(--u) * 11); line-height: 1;
+        font-variant-numeric: tabular-nums; text-shadow: 0 0 calc(var(--u) * 2.5) rgba(34, 197, 94, 0.6);
+      }
+      .label { font-size: calc(var(--u) * 4); letter-spacing: 0.04em; }
+      .track { margin-top: calc(var(--u) * 1.6); height: calc(var(--u) * 0.8); border-radius: 99px;
+               background: rgba(245, 245, 247, 0.15); overflow: hidden; }
+      .fill { height: 100%; width: 100%; background: var(--green); transform-origin: left center; transform: scaleX(0); }
+      .row { display: flex; align-items: center; gap: calc(var(--u) * 1.6); margin-top: calc(var(--u) * 1.4); }
+      .row .name { width: calc(var(--u) * 14); font-size: calc(var(--u) * 3.6); }
+      .row .bar { height: calc(var(--u) * 3.2); border-radius: calc(var(--u) * 0.6); transform-origin: left center; transform: scaleX(0); }
+      .row .val { font-family: "Anton", sans-serif; font-size: calc(var(--u) * 4); min-width: calc(var(--u) * 8); }
+      .dots { display: flex; gap: calc(var(--u) * 1.6); margin-top: calc(var(--u) * 1.6); justify-content: center; }
+      .dot { width: calc(var(--u) * 7); height: calc(var(--u) * 7); border-radius: 50%; display: flex;
+             align-items: center; justify-content: center; font-family: "Anton", sans-serif;
+             font-size: calc(var(--u) * 3.6); transform: scale(0); }
+      .gauge text { font-family: "Anton", sans-serif; }
+      #outro { position: absolute; inset: 0; opacity: 0;
+               background: radial-gradient(circle at 50% 45%, #0f2a18 0%, #080b10 62%); }
+      #outro img { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%) scale(0.82); opacity: 0; }
+      /* alone dietro il logo: un cerchio sfumato invece di filter:drop-shadow, che costringe
+         HyperFrames alla cattura lenta */
+      #outro .halo { position: absolute; left: 50%; top: 45%; width: 70%; aspect-ratio: 1; border-radius: 50%;
+                     transform: translate(-50%, -50%); opacity: 0;
+                     background: radial-gradient(circle, rgba(34, 197, 94, 0.45) 0%, rgba(34, 197, 94, 0) 65%); }
+      /* sottotitoli: ogni parola entra quando viene detta; contorno e ombra solo con proprieta' di testo */
+      .cap { position: absolute; left: 0; right: 0; padding: 0 6%; text-align: center; opacity: 0;
+             transform: translateY(-50%); line-height: 1.08; }
+      .cap .w { display: inline-block; margin: 0 0.12em; color: #fff; opacity: 0;
+                -webkit-text-stroke: calc(var(--u) * 0.55) #080b10; paint-order: stroke fill;
+                text-shadow: 0 calc(var(--u) * 0.5) calc(var(--u) * 1.2) rgba(0, 0, 0, 0.75); }
+      .cap .w.brand { color: var(--gold); }
+      .cap .w.pill { padding: 0 0.18em; border-radius: 0.18em; }
+      .spark { position: absolute; width: calc(var(--u) * 0.6); height: calc(var(--u) * 0.6); border-radius: 50%;
+               background: var(--gold); box-shadow: 0 0 calc(var(--u) * 1.4) var(--gold); opacity: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="__DUR__"
+         data-width="__W__" data-height="__H__">
+      <div id="drv" class="clip" data-start="0" data-duration="__DUR__" data-track-index="0"
+           style="position:absolute;width:1px;height:1px;opacity:0"></div>
+    </div>
+    <script>
+      (function () {
+        window.__timelines = window.__timelines || {};
+        var CONFIG = __CONFIG__;
+        var W = __W__, H = __H__, DUR = __DUR__;
+        var root = document.getElementById("root");
+        var u = Math.min(W, H) / 100;            // unita' di misura: 1% del lato corto
+        root.style.setProperty("--u", u + "px");
+        var topY = H > W ? H * 0.12 : H * 0.07;   // le grafiche stanno in alto
+        var tl = gsap.timeline({ paused: true });
+
+        function el(tag, cls, parent, html) {
+          var e = document.createElement(tag);
+          if (cls) e.className = cls;
+          if (html !== undefined) e.innerHTML = html;
+          (parent || root).appendChild(e);
+          return e;
+        }
+        function card(ev) {
+          var c = el("div", "card");
+          c.style.top = topY + "px";
+          if (ev.kicker) el("div", "kicker", c, ev.kicker);
+          return c;
+        }
+        function inOut(c, t, d) {          // entrata e uscita comuni a tutte le schede
+          tl.fromTo(c, { opacity: 0, y: u * 4, scale: 0.92 },
+                    { opacity: 1, y: 0, scale: 1, duration: 0.35, ease: "back.out(1.6)" }, t);
+          tl.to(c, { opacity: 0, y: -u * 3, duration: 0.3, ease: "power2.in" }, t + d - 0.3);
+        }
+        function fmt(v, dec) { return v.toFixed(dec).replace(".", ","); }
+
+        var builders = {
+          contatore: function (ev) {
+            var c = card(ev), n = el("div", "big", c, "0");
+            el("div", "label", c, ev.etichetta || "");
+            var tr = el("div", "track", c), f = el("div", "fill", tr);
+            c.style.textAlign = "center";
+            var st = { v: 0 };
+            tl.to(st, { v: ev.valore, duration: 1.2, ease: "power2.out", onUpdate: function () {
+              n.textContent = Math.round(st.v).toLocaleString("it-IT") + (ev.suffisso || "");
+            } }, ev.t + 0.15);
+            tl.to(f, { scaleX: 1, duration: 1.2, ease: "power2.out" }, ev.t + 0.15);
+            inOut(c, ev.t, ev.durata);
+          },
+          barre: function (ev) {
+            var c = card(ev);
+            var max = Math.max.apply(null, ev.voci.map(function (v) { return v.valore; }));
+            ev.voci.forEach(function (v, i) {
+              var r = el("div", "row", c);
+              el("div", "name", r, v.nome);
+              var b = el("div", "bar", r);
+              b.style.width = (u * 34 * v.valore / max) + "px";
+              b.style.background = i === 0 ? "var(--green)" : "rgba(245,245,247,0.85)";
+              var val = el("div", "val", r, "0");
+              var st = { v: 0 };
+              tl.to(b, { scaleX: 1, duration: 0.9, ease: "power3.out" }, ev.t + 0.2 + i * 0.15);
+              tl.to(st, { v: v.valore, duration: 0.9, ease: "power3.out", onUpdate: function () {
+                val.textContent = fmt(st.v, ev.decimali === undefined ? 2 : ev.decimali);
+              } }, ev.t + 0.2 + i * 0.15);
+            });
+            inOut(c, ev.t, ev.durata);
+          },
+          rating: function (ev) {
+            var c = card(ev), s = u * 34, r = s * 0.4;
+            c.style.textAlign = "center";
+            var len = Math.PI * r;
+            var svg = el("div", "gauge", c,
+              '<svg width="' + s + '" height="' + (s * 0.6) + '" viewBox="0 0 ' + s + " " + (s * 0.6) + '">' +
+              '<path d="M ' + (s / 2 - r) + " " + (s * 0.52) + " A " + r + " " + r + " 0 0 1 " + (s / 2 + r) + " " + (s * 0.52) +
+              '" fill="none" stroke="rgba(245,245,247,0.15)" stroke-width="' + u * 2.4 + '" stroke-linecap="round"/>' +
+              '<path class="arc" d="M ' + (s / 2 - r) + " " + (s * 0.52) + " A " + r + " " + r + " 0 0 1 " + (s / 2 + r) + " " + (s * 0.52) +
+              '" fill="none" stroke="#22c55e" stroke-width="' + u * 2.4 + '" stroke-linecap="round" stroke-dasharray="' + len +
+              '" stroke-dashoffset="' + len + '"/>' +
+              '<text x="' + s / 2 + '" y="' + s * 0.5 + '" text-anchor="middle" fill="#f5f5f7" font-size="' + u * 9 + '">0</text></svg>');
+            el("div", "label", c, ev.etichetta || "");
+            var arc = svg.querySelector(".arc"), txt = svg.querySelector("text"), st = { v: 0 };
+            tl.to(arc, { attr: { "stroke-dashoffset": len * (1 - ev.valore / 100) }, duration: 1.1, ease: "power2.out" }, ev.t + 0.2);
+            tl.to(st, { v: ev.valore, duration: 1.1, ease: "power2.out", onUpdate: function () {
+              txt.textContent = Math.round(st.v);
+            } }, ev.t + 0.2);
+            inOut(c, ev.t, ev.durata);
+          },
+          forma: function (ev) {
+            var c = card(ev), d = el("div", "dots", c);
+            var colors = { V: "var(--green)", N: "rgba(245,245,247,0.55)", P: "#ef4444" };
+            ev.sequenza.split("").forEach(function (k, i) {
+              var dot = el("div", "dot", d, k);
+              dot.style.background = colors[k] || "#666";
+              tl.to(dot, { scale: 1, duration: 0.3, ease: "back.out(2.2)" }, ev.t + 0.25 + i * 0.12);
+            });
+            inOut(c, ev.t, ev.durata);
+          },
+          chiusura: function (ev) {
+            var o = el("div", "", root); o.id = "outro";
+            var halo = el("div", "halo", o);
+            var img = el("img", "", o); img.src = ev.logo;
+            img.style.width = (W * (H > W ? 0.78 : W > H ? 0.42 : 0.6)) + "px";
+            tl.to(o, { opacity: 1, duration: 0.35, ease: "none" }, ev.t);
+            tl.to(img, { opacity: 1, scale: 1, duration: 0.8, ease: "expo.out" }, ev.t + 0.15);
+            for (var i = 0; i < 18; i++) {      // scintille dorate che partono dal logo
+              var sp = el("div", "spark", o), a = (i / 18) * Math.PI * 2, dist = u * (18 + (i % 4) * 7);
+              sp.style.left = W / 2 + "px"; sp.style.top = H * 0.45 + "px";
+              tl.fromTo(sp, { opacity: 1, x: 0, y: 0 },
+                        { opacity: 0, x: Math.cos(a) * dist, y: Math.sin(a) * dist, duration: 1.1, ease: "power2.out" },
+                        ev.t + 0.35 + (i % 3) * 0.05);
+            }
+            tl.to(halo, { opacity: 1, duration: 0.6, ease: "power2.out" }, ev.t + 0.3);
+            tl.to(halo, { opacity: 0.45, duration: 0.8, yoyo: true, repeat: 1, ease: "sine.inOut" }, ev.t + 0.9);
+          },
+        };
+
+        (CONFIG.eventi || []).forEach(function (ev) {
+          if (builders[ev.tipo]) builders[ev.tipo](ev);
+        });
+
+        // --- sottotitoli: gruppi di parole preparati da grafica.build_captions ---------------
+        var CAP_Y = CONFIG.cap_y * H, FS = CONFIG.cap_fs;
+        (CONFIG.sottotitoli || []).forEach(function (g) {
+          var box = el("div", "cap");
+          box.style.top = CAP_Y + "px";
+          box.style.fontFamily = '"' + g.font + '", sans-serif';
+          box.style.transform = "translateY(-50%) rotate(" + g.rot + "deg)";
+          tl.set(box, { opacity: 1 }, g.inizio);
+          tl.set(box, { opacity: 0 }, g.fine);
+          g.parole.forEach(function (w, i) {
+            var s = el("span", "w" + (w.brand ? " brand" : ""), box, w.testo);
+            s.style.fontSize = Math.round(FS * g.k * w.k) + "px";
+            var next = i + 1 < g.parole.length ? g.parole[i + 1].a : g.fine;
+            // entrata: la parola "salta" dentro quando viene detta
+            tl.fromTo(s, { opacity: 0, scale: 0.4, y: u * 2.5 },
+                      { opacity: 1, scale: 1.16, y: 0, duration: 0.13, ease: "back.out(3)" }, w.a);
+            tl.to(s, { scale: 1, duration: 0.16, ease: "power2.out" }, w.a + 0.13);
+            // parola detta: verde con bagliore (le parole chiave in una pillola verde)
+            var base = w.brand ? "#f5b82e" : "#ffffff";
+            if (w.enfasi) {
+              s.className += " pill";
+              tl.set(s, { backgroundColor: "#22c55e", color: "#080b10", webkitTextStroke: "0px #080b10" }, w.a);
+              tl.set(s, { backgroundColor: "rgba(34,197,94,0)", color: base, webkitTextStroke: (u * 0.55) + "px #080b10" }, next);
+            } else {
+              tl.set(s, { color: "#22c55e", textShadow: "0 0 " + u * 2 + "px rgba(34,197,94,0.9)" }, w.a);
+              tl.set(s, { color: base, textShadow: "0 " + u * 0.5 + "px " + u * 1.2 + "px rgba(0,0,0,0.75)" }, next);
+            }
+          });
+        });
+        tl.to({}, { duration: 0.01 }, DUR - 0.01);  // la timeline copre tutto il video
+        window.__timelines["main"] = tl;
+        tl.seek(0);
+      })();
+    </script>
+  </body>
+</html>
