@@ -85,6 +85,31 @@ jobs:
           path: ~/.cache/huggingface/hub/models--unsloth--Qwen3-4B-Instruct-2507-GGUF
           key: qwen3-4b-instruct-2507-q4km-v1
 
+      # Grafiche e sottotitoli animati (HyperFrames). Se l'installazione fallisce il job continua:
+      # lo studio vede HYPERFRAMES diverso da 1 e usa i sottotitoli classici.
+      - name: Studio · Node.js (per HyperFrames)
+        if: steps.dispatch.outputs.action == 'studio' && steps.dispatch.outputs.media == '1'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Studio · cache di HyperFrames (pacchetto e browser)
+        if: steps.dispatch.outputs.action == 'studio' && steps.dispatch.outputs.media == '1'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            ~/.cache/hyperframes
+          key: hyperframes-0.8.152-v1
+
+      - name: Studio · HyperFrames
+        if: steps.dispatch.outputs.action == 'studio' && steps.dispatch.outputs.media == '1'
+        continue-on-error: true
+        run: |
+          npx -y hyperframes@0.8.152 telemetry disable > /dev/null 2>&1 || true
+          npx -y hyperframes@0.8.152 browser ensure
+          echo "HYPERFRAMES=1" >> "$GITHUB_ENV"
+
       - name: Studio · asset privati (dataset Kaggle)
         if: steps.dispatch.outputs.action == 'studio' && steps.dispatch.outputs.media == '1'
         env:

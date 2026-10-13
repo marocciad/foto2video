@@ -49,6 +49,8 @@ dispatcher/dispatch.py ── GitHub Actions cron */10: se kernel non attivo e c
 | Sottotitoli: testo dal copione, tempi da whisper (`align_script`) | whisper sbaglia qualche parola ("matematico", "gol a test"); il copione è esatto |
 | `#voce`: testo letto da Kokoro su Actions (CPU), intro sempre registrata | per quando Daniele non può registrare. "BetForge" sintetizzato con `am_onyx` e incollato nella frase (`tts.segments`). Kokoro/torch-cpu installati solo se `tts=1` |
 | `#idea`: copione da Qwen3-4B-Instruct-2507 Q4_K_M (llama-cpp, CPU) | Apache 2.0. Il prompt vieta vincite, quote e scommesse e anche le promesse di certezza; `risky_terms` rigenera fino a 3 volte. Su CPU circa 30–60 s |
+| Overlay HyperFrames (`studio/grafica.py`, versione fissata 0.8.152) sopra la regia numpy | sottotitoli parola per parola, grafiche dal copione (`{numero: …}`), transizioni e apertura. Reso con sfondo trasparente (WebM VP9 con alfa), poi `ffmpeg overlay`. Se fallisce si torna ad ASS (`burn_subtitles`). Niente `filter:` CSS nel modello: costringe alla cattura lenta |
+| Grafiche solo con numeri scritti da Daniele nel copione | dati inventati in una pubblicità di un'app di analisi sarebbero ingannevoli |
 | Whisper `small` su Actions | con il copione bastano i tempi, e `small` è circa 10 volte più veloce di `medium` |
 | Cache modello come dataset Kaggle (`model_cache/`), rilevata in automatico da `find_local_model()` | evita circa 30 GB di download a sessione |
 

@@ -37,7 +37,8 @@ HELP = ("🎬 *Studio BetForge*\n\n"
         "*Non sai cosa dire?* Scrivi `#idea` e l'argomento: ti propongo un copione.\n\n"
         "*Opzioni* (tocca per copiare, poi incolla in fondo al testo):\n"
         "`#verticale` · `#orizzontale` · `#quadrato` · `#voce` · `#nointro`\n\n"
-        "Altri comandi: /formati · /voce · /idea · /id\n"
+        "*Numeri animati*: scrivi `{numero: 12.480 | partite}` nel testo (vedi /grafiche).\n\n"
+        "Altri comandi: /formati · /voce · /idea · /grafiche · /id\n"
         "Le *foto* con didascalia vanno ancora al generatore IA su GPU.")
 FORMATS_HELP = ("📐 *Formati*\n\n"
                 "Senza tag ricevi tutti e tre. Con un tag ne ricevi uno solo:\n"
@@ -55,12 +56,21 @@ IDEA_HELP = ("✍️ *Copione proposto dal bot*\n\n"
              "`#idea parla dei gol attesi`\n\n"
              "Ti rispondo con un copione di circa 25 secondi da copiare con un tocco. Poi lo registri "
              "(testo + vocale) oppure lo rimandi con `#voce`. Non ti piace? Rimanda `#idea`.")
+GRAPHICS_HELP = ("📊 *Grafiche nel copione*\n\n"
+                 "Scrivi la grafica tra parentesi graffe subito dopo la frase: compare quando cominci "
+                 "a dirla. Non viene letta né scritta nei sottotitoli.\n\n"
+                 "`{numero: 12.480 | partite analizzate}`\n"
+                 "`{barre: Inter 1,8 - Milan 0,9 | gol attesi}`\n"
+                 "`{forma: VVNPV | Inter}`  (V vinta, N pari, P persa)\n"
+                 "`{rating: 87 | rating Inter}`\n\n"
+                 "Esempio: `Migliaia di partite analizzate. {numero: 12.480 | partite}`\n"
+                 "⚠️ Usa solo numeri veri.")
 # Menu dei comandi (pulsante "Menu" accanto alla tastiera): lo registra setup/bot_menu.py
 COMMANDS = [("help", "Come si usa"), ("formati", "Formati e tag"),
             ("voce", "Video senza registrare (voce sintetica)"), ("idea", "Fatti proporre un copione"),
-            ("id", "Il tuo ID Telegram")]
+            ("grafiche", "Numeri e grafici animati nel video"), ("id", "Il tuo ID Telegram")]
 COMMAND_TEXTS = {"start": HELP, "help": HELP, "aiuto": HELP, "formati": FORMATS_HELP, "voce": VOICE_HELP,
-                 "idea": IDEA_HELP}
+                 "idea": IDEA_HELP, "grafiche": GRAPHICS_HELP}
 
 
 # ---------------------------------------------------------------------------
@@ -250,17 +260,21 @@ def make_script(tg: Telegram, job: dict):
 
 
 def make_video(tg: Telegram, job: dict, assets: str, whisper_model: str):
-    from studio import audio, regia  # import pigro: numpy/Pillow/whisper servono solo qui
+    from studio import audio, grafica, regia  # import pigro: numpy/Pillow/whisper servono solo qui
 
     voice = job["voce"]  # None = voce sintetica dal copione
     src = voice or job["copione"]
     chat, mid = src["chat"]["id"], src["message_id"]
     script, formats, no_intro = parse_tags((job["copione"] or {}).get("text", ""))
+    # i segni delle grafiche ({numero: ...}) si tolgono subito: voce e sottotitoli non li leggono
+    script, graphic_items, graphic_errors = grafica.parse_markup(script)
     if voice:
         intro_msg = "🎙️ Vocale ricevuto" + (" con il testo" if script else "")
     else:
         intro_msg = "🗣️ Testo ricevuto: lo leggo con la voce sintetica"
     status = tg.send(chat, intro_msg + ": preparo il video (circa 5–10 minuti)…", reply_to=mid)
+    if graphic_errors:
+        tg.send(chat, "⚠️ Grafiche saltate (il video si fa comunque):\n" + "\n".join(graphic_errors), reply_to=mid)
     t0 = time.time()
     work = tempfile.mkdtemp(prefix="studio_")
     try:
@@ -301,11 +315,34 @@ def make_video(tg: Telegram, job: dict, assets: str, whisper_model: str):
             raise RuntimeError("non ho riconosciuto parole nel vocale")
         emphasis = {w.lower() for w in character.get("enfasi", [])}
 
+        intro_used = len(parts) > 1
+        n_intro = len(character.get("testo_intro", "").split()) if intro_used and script else 0
+        speech = len(audio.load_pcm(wet)) / 48000
+        logo_path = os.path.join(assets, character.get("logo", "logo.png"))
         for fmt in (f for f in formats if f in character["inquadrature"]):
             tg.edit(chat, status, f"🎬 Monto il video {fmt.replace('x', ':')}…")
             out = os.path.join(work, f"video_{fmt}.mp4")
             r = regia.Renderer(assets, character, fmt)
-            r.render(wet, phrases, out, emphasis)
+            if not grafica.available():
+                r.render(wet, phrases, out, emphasis)  # senza HyperFrames: sottotitoli ASS
+            else:
+                base = os.path.join(work, f"base_{fmt}.mp4")
+                total = r.render(wet, phrases, base, emphasis, subtitles=False)
+                try:
+                    tg.edit(chat, status, f"✨ Grafiche e sottotitoli {fmt.replace('x', ':')}…")
+                    shots = regia.assign_shots(len(phrases), r.plan)
+                    cuts = [c for i, c in enumerate(regia.cut_times(phrases, speech)[1:-1], 1)
+                            if shots[i] != shots[i - 1]]
+                    events = grafica.schedule(grafica.markup_hits(graphic_items, words, n_intro), speech,
+                                              logo="logo.png" if os.path.exists(logo_path) else None)
+                    cfg = grafica.overlay_config(phrases, r.size, emphasis, cuts, intro_used)
+                    overlay = os.path.join(work, f"overlay_{fmt}.webm")
+                    logo = regia._load_logo(logo_path) if os.path.exists(logo_path) else None
+                    grafica.render_overlay(events, r.size, total, overlay, logo, cfg)
+                    grafica.composite(base, overlay, out)
+                except Exception as e:  # noqa: BLE001 - le grafiche non devono mai far perdere il video
+                    print(f"[studio] grafiche HyperFrames non riuscite, uso i sottotitoli classici: {e!r}")
+                    r.burn_subtitles(base, phrases, out, emphasis)
             tg.send_video(chat, out, f"🎬 {fmt.replace('x', ':')}", r.size, reply_to=mid)
         tg.edit(chat, status, f"✅ Fatto in {(time.time() - t0) / 60:.1f} min")
     except Exception as e:  # noqa: BLE001 - qualunque errore va riportato in chat

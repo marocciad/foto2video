@@ -77,6 +77,15 @@ Tag nel testo: `#verticale`, `#orizzontale` o `#quadrato` (un solo formato), `#n
 
 **Non sai cosa dire?** Scrivi `#idea` e l'argomento, per esempio `#idea parla dei gol attesi`. Il bot propone un copione di circa 25 s scritto da Qwen3-4B (Apache 2.0, su CPU), con le regole del personaggio e niente riferimenti al gioco con vincite. Lo copi e lo registri, oppure lo rimandi con `#voce`.
 
+**Grafiche e sottotitoli animati (HyperFrames).** Su GitHub i video si completano con un overlay HyperFrames (licenza Apache 2.0):
+- sottotitoli in cui ogni parola entra quando viene detta, con le parole chiave in una pillola verde;
+- transizioni (lampo o glitch) a ogni cambio di inquadratura;
+- apertura animata sull'intro;
+- chiusura con il logo;
+- grafiche scritte nel copione: `{numero: 12.480 | partite analizzate}`, `{barre: Inter 1,8 - Milan 0,9 | gol attesi}`, `{forma: VVNPV | Inter}`, `{rating: 87 | rating Inter}`. Vedi `/grafiche` nel bot.
+
+Se HyperFrames non è disponibile o fallisce, il video esce con i sottotitoli classici.
+
 ### Menu del bot
 
 ```bash
@@ -159,6 +168,7 @@ studio/                   regia virtuale: vocale -> video (gira su GitHub Action
   audio.py                pulizia, voce camuffata, volume, trascrizione, allineamento al copione
   tts.py                  voce sintetica per #voce (Kokoro, "BetForge" con voce inglese)
   copione.py              copione proposto per #idea (Qwen3-4B GGUF con llama-cpp, controllo parole a rischio)
+  grafica.py + grafica/   overlay HyperFrames: sottotitoli, grafiche dal copione, transizioni, apertura, chiusura
   regia.py                inquadrature, bagliore, sottotitoli cinetici, logo finale
   __main__.py             legge la coda Telegram (vocali + copioni) e monta i video
   fonts/                  5 font OFL (licenze incluse)

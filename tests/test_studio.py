@@ -264,3 +264,57 @@ def test_clean_and_score():
 def test_script_reply_is_copyable_and_warns():
     msg = bot.script_reply("Io guardo i numeri.", ["vinc"])
     assert "```\nIo guardo i numeri.\n```" in msg and "⚠️" in msg and "vinc" in msg
+
+
+# --- grafiche HyperFrames (logica pura) -------------------------------------------
+
+def test_parse_markup_clean_text_and_anchor_at_sentence_start():
+    from studio import grafica
+    text, items, errors = grafica.parse_markup(
+        "Io guardo i numeri. Migliaia di partite analizzate. {numero: 12.480+ | partite analizzate} "
+        "Gol attesi {barre: Inter 1,8 - Milan 0,9 | gol attesi} ogni giorno.")
+    assert text == "Io guardo i numeri. Migliaia di partite analizzate. Gol attesi ogni giorno."
+    words = text.split()
+    assert [words[i] for i, _ in items] == ["Migliaia", "Gol"]
+    num, bars = items[0][1], items[1][1]
+    assert num == {"tipo": "contatore", "valore": 12480.0, "decimali": 0, "suffisso": "+",
+                   "etichetta": "PARTITE ANALIZZATE"}
+    assert bars["voci"] == [{"nome": "INTER", "valore": 1.8}, {"nome": "MILAN", "valore": 0.9}]
+    assert bars["kicker"] == "GOL ATTESI" and errors == []
+
+
+def test_parse_markup_forma_rating_and_errors():
+    from studio import grafica
+    text, items, errors = grafica.parse_markup("Forma {forma: WWDLW | Inter} e rating {rating: 87} e {barre: Inter - Milan}")
+    assert text == "Forma e rating e"
+    assert items[0][1]["sequenza"] == "VVNPV" and items[0][1]["kicker"] == "FORMA INTER"
+    assert items[1][1]["valore"] == 87 and items[1][1]["kicker"] == "RATING"
+    assert len(errors) == 1 and "Inter - Milan" in errors[0]
+
+
+def test_markup_hits_offset_and_schedule():
+    from studio import grafica
+    words = [W(f"p{i}", i * 1.0, i * 1.0 + 0.5) for i in range(12)]
+    hits = grafica.markup_hits([(0, {"tipo": "rating", "valore": 80}), (1, {"tipo": "forma", "sequenza": "V"})],
+                               words, offset=4)
+    assert [h["t"] for h in hits] == [3.9, 4.9]
+    ev = grafica.schedule(hits, 11.0, logo="logo.png")
+    # il rating avrebbe solo 1 s prima della forma (sotto MIN_DUR): si salta, la forma resta 2,6 s
+    assert [e["tipo"] for e in ev] == ["forma", "chiusura"]
+    assert ev[0]["durata"] == grafica.MAX_DUR and ev[-1]["t"] == 11.0
+
+
+def test_overlay_config_cuts_opening_and_captions():
+    from studio import grafica
+    ph = audio.split_phrases([W("Benvenuti…", 0, 1), W("questo", 2.2, 2.5), W("è", 2.5, 2.6), W("BetForge.", 2.6, 3.2),
+                              W("Gol", 4, 4.2), W("attesi.", 4.2, 4.6)])
+    cfg = grafica.overlay_config(ph, (720, 1280), {"gol"}, [0.0, 2.1, 3.9], intro=True)
+    assert cfg["tagli"] == [2.1, 3.9]
+    assert cfg["apertura"] == {"fine_benvenuti": 1, "inizio_brand": 2.2, "fine_brand": 3.2}
+    groups = cfg["sottotitoli"]
+    assert all(a["fine"] <= b["inizio"] for a, b in zip(groups, groups[1:]))
+    gol = [w for g in groups for w in g["parole"] if w["testo"] == "GOL"][0]
+    assert gol["enfasi"] and gol["k"] == 1.38
+    brand = [w for g in groups for w in g["parole"] if "BETFORGE" in w["testo"]][0]
+    assert brand["brand"] and not brand["enfasi"]
+    assert grafica.overlay_config(ph, (720, 1280), set(), [], intro=False).get("apertura") is None
