@@ -68,6 +68,7 @@ kaggle kernels output <user>/foto2video-worker -p out/          # log dell'ultim
 - ✅ Logica bot, dispatcher, backend Ken Burns: testati e collaudati su Kaggle (2026-10-11).
 - ✅ **Studio collaudato su GitHub Actions** (2026-10-12): vocale di 19 s + copione → 9:16 e 16:9 in circa 2 min 45 s dall'avvio del workflow (installazione 30 s, montaggio 126 s). Wan è stato collaudato su 2×T4 (circa 16 min a sessione senza cache), ma per questo formato non serve.
 - ✅ **Avvio ogni 5 minuti con cron-job.org** (2026-10-12): POST a `.../actions/workflows/dispatch.yml/dispatches` con token fine-grained (solo `foto2video`, Actions read/write). Un body vuoto dà 422: serve `{"ref":"main"}`. **Il token scade il 2027-10-10**: va rigenerato e aggiornato su cron-job.org. L'API version 2022-11-28 è in dismissione (sunset 2028-03-10).
+- ✅ **Formato 1:1** e **modalità `#voce`** (2026-10-13): `#voce` collaudata su Actions, con installazione di kokoro in 36 s e studio completo in circa 1 min 45 s per un solo formato.
 - ⏳ Da fare: logo ad alta risoluzione.
 - Wan su Kaggle: funziona (2 GPU, fp16), ma fa sorridere la maschera e deforma l'armatura. Corretti `torchao` vecchio e il fallback in caso di errore di caricamento.
 - Rischi da verificare al collaudo: qualità in FP8 storage (disattivabile con `WAN_FP8=false`), UMT5 in fp16 (possibili NaN → `WAN_DTYPE=bf16`), output nero in fp16 (→ `WAN_DTYPE=bf16`), OOM (→ `WAN_MAX_AREA` più basso), `from_pretrained(text_encoder=None, tokenizer=None)` sul ramo a 2 GPU, valore di `machine_shape` accettato dalla CLI, tempo reale per clip.
