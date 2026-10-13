@@ -75,6 +75,8 @@ Tag nel testo: `#verticale`, `#orizzontale` o `#quadrato` (un solo formato), `#n
 
 **Senza registrare:** manda solo il testo con `#voce`. Lo legge una voce sintetica (Kokoro-82M, Apache 2.0) con lo stesso effetto metallico, e "BetForge" è pronunciato da una voce inglese. Il lavoro parte subito e l'intro resta la tua registrazione.
 
+**Non sai cosa dire?** Scrivi `#idea` e l'argomento, per esempio `#idea parla dei gol attesi`. Il bot propone un copione di circa 25 s scritto da Qwen3-4B (Apache 2.0, su CPU), con le regole del personaggio e niente riferimenti al gioco con vincite. Lo copi e lo registri, oppure lo rimandi con `#voce`.
+
 ### Menu del bot
 
 ```bash
@@ -156,6 +158,7 @@ Comandi: `/help`, `/id`.
 studio/                   regia virtuale: vocale -> video (gira su GitHub Actions, CPU)
   audio.py                pulizia, voce camuffata, volume, trascrizione, allineamento al copione
   tts.py                  voce sintetica per #voce (Kokoro, "BetForge" con voce inglese)
+  copione.py              copione proposto per #idea (Qwen3-4B GGUF con llama-cpp, controllo parole a rischio)
   regia.py                inquadrature, bagliore, sottotitoli cinetici, logo finale
   __main__.py             legge la coda Telegram (vocali + copioni) e monta i video
   fonts/                  5 font OFL (licenze incluse)

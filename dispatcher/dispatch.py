@@ -139,7 +139,8 @@ def main():
     print(f"[dispatch] {len(updates)} messaggi in attesa -> {action}")
     tts = any(re.search(r"(?i)#voce\b", (u.get("message") or {}).get("text") or "") for u in updates)
     # media: serve ffmpeg/whisper (vocale o voce sintetica); tts: serve anche kokoro
-    set_output(action=action, media=int(tts or any(is_audio(u) for u in updates)), tts=int(tts))
+    llm = any(re.search(r"(?i)#idea\b", (u.get("message") or {}).get("text") or "") for u in updates)
+    set_output(action=action, media=int(tts or any(is_audio(u) for u in updates)), tts=int(tts), llm=int(llm))
 
     if action == "start":
         p = subprocess.run(["kaggle", "kernels", "push", "-p", kernel_dir], capture_output=True, text=True)

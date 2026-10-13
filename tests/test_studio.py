@@ -239,3 +239,28 @@ def test_tts_synthesis(tmp_path):
     out = os.path.join(str(tmp_path), "tts.wav")
     tts.synthesize("Questo è BetForge.", out)
     assert len(audio.load_pcm(out)) / 48000 > 0.5
+
+
+# --- copione proposto (#idea) ---------------------------------------------------
+
+def test_idea_becomes_script_job():
+    jobs = bot.plan_queue([text(1, NOW - 5, "#idea parla dei gol attesi")], {ME}, NOW)
+    assert jobs[0]["tipo"] == "copione" and jobs[0]["ids"] == [1]
+
+
+def test_risky_terms_ignore_brand():
+    from studio import copione
+    assert copione.risky_terms("BetForge analizza i dati. I numeri parlano.") == []
+    assert set(copione.risky_terms("Punta sulle quote e vinci soldi")) >= {"punta", "quot", "vinc", "soldi"}
+
+
+def test_clean_and_score():
+    from studio import copione
+    assert copione.clean('Copione: **"Benvenuti… Io guardo i numeri."** #calcio') == "Io guardo i numeri."
+    assert copione.score_script(" ".join(["parola"] * 60), []) == (0, 0)
+    assert copione.score_script(" ".join(["parola"] * 30), []) == (0, 20)
+
+
+def test_script_reply_is_copyable_and_warns():
+    msg = bot.script_reply("Io guardo i numeri.", ["vinc"])
+    assert "```\nIo guardo i numeri.\n```" in msg and "⚠️" in msg and "vinc" in msg

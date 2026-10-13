@@ -33,10 +33,11 @@ HELP = ("🎬 *Studio BetForge*\n\n"
         "1. Manda il *testo* del copione.\n"
         "2. Manda il *vocale* con lo stesso testo (prima o dopo, entro 10 minuti).\n"
         "Dopo qualche minuto ricevi il video in 9:16, 16:9 e 1:1.\n\n"
-        "*Senza registrare*: manda solo il testo con `#voce` in fondo.\n\n"
+        "*Senza registrare*: manda solo il testo con `#voce` in fondo.\n"
+        "*Non sai cosa dire?* Scrivi `#idea` e l'argomento: ti propongo un copione.\n\n"
         "*Opzioni* (tocca per copiare, poi incolla in fondo al testo):\n"
         "`#verticale` · `#orizzontale` · `#quadrato` · `#voce` · `#nointro`\n\n"
-        "Altri comandi: /formati · /voce · /id\n"
+        "Altri comandi: /formati · /voce · /idea · /id\n"
         "Le *foto* con didascalia vanno ancora al generatore IA su GPU.")
 FORMATS_HELP = ("📐 *Formati*\n\n"
                 "Senza tag ricevi tutti e tre. Con un tag ne ricevi uno solo:\n"
@@ -49,10 +50,17 @@ VOICE_HELP = ("🗣️ *Video senza registrare*\n\n"
               "`Tu guardi la partita. Io guardo i numeri. #voce`\n\n"
               "Lo legge la voce sintetica con lo stesso effetto metallico, e il video parte subito.\n"
               "L'intro resta la tua registrazione: aggiungi `#nointro` per toglierla.")
+IDEA_HELP = ("✍️ *Copione proposto dal bot*\n\n"
+             "Scrivi un'idea con `#idea`, per esempio:\n"
+             "`#idea parla dei gol attesi`\n\n"
+             "Ti rispondo con un copione di circa 25 secondi da copiare con un tocco. Poi lo registri "
+             "(testo + vocale) oppure lo rimandi con `#voce`. Non ti piace? Rimanda `#idea`.")
 # Menu dei comandi (pulsante "Menu" accanto alla tastiera): lo registra setup/bot_menu.py
 COMMANDS = [("help", "Come si usa"), ("formati", "Formati e tag"),
-            ("voce", "Video senza registrare (voce sintetica)"), ("id", "Il tuo ID Telegram")]
-COMMAND_TEXTS = {"start": HELP, "help": HELP, "aiuto": HELP, "formati": FORMATS_HELP, "voce": VOICE_HELP}
+            ("voce", "Video senza registrare (voce sintetica)"), ("idea", "Fatti proporre un copione"),
+            ("id", "Il tuo ID Telegram")]
+COMMAND_TEXTS = {"start": HELP, "help": HELP, "aiuto": HELP, "formati": FORMATS_HELP, "voce": VOICE_HELP,
+                 "idea": IDEA_HELP}
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +75,8 @@ def kind(msg: dict) -> str:
     text = (msg.get("text") or "").strip()
     if text.startswith("/"):
         return "command"
+    if re.search(r"(?i)#idea\b", text):
+        return "idea"  # richiesta di un copione: si risponde con il testo, niente video
     if re.search(r"(?i)#voce\b", text):
         return "tts"  # testo da leggere con la voce sintetica: niente vocale da aspettare
     return "text" if text else "other"
@@ -114,6 +124,8 @@ def plan_queue(updates: list, allowed: set, now: float) -> list:
             jobs.append({"tipo": "video", "voce": m, "copione": t, "ids": [uid] + ([tid] if tid else [])})
         elif k == "tts":
             jobs.append({"tipo": "video", "voce": None, "copione": m, "ids": [uid]})
+        elif k == "idea":
+            jobs.append({"tipo": "copione", "msg": m, "ids": [uid]})
         elif k == "text":
             if now - m.get("date", now) < WAIT_TEXT:
                 break  # copione in attesa del suo vocale
@@ -206,6 +218,37 @@ class Telegram:
 # Lavorazione
 # ---------------------------------------------------------------------------
 
+def script_reply(text: str, risky: list) -> str:
+    """Messaggio con il copione proposto: in un blocco di codice, cosi' si copia con un tocco."""
+    secs = round(len(text.split()) / 2.6)
+    msg = (f"✍️ *Copione proposto* (circa {secs} s):\n\n```\n{text}\n```\n"
+           "Tocca il testo per copiarlo, poi:\n"
+           "• registralo e mandami testo + vocale, oppure\n"
+           "• mandalo con `#voce` e lo legge la voce sintetica.\n"
+           "Non ti convince? Rimanda `#idea` per un'altra proposta.")
+    if risky:
+        msg += f"\n\n⚠️ Contiene parole a rischio per il divieto di pubblicità del gioco: {', '.join(risky)}. Meglio cambiarle."
+    return msg
+
+
+def make_script(tg: Telegram, job: dict):
+    m = job["msg"]
+    chat, mid = m["chat"]["id"], m["message_id"]
+    idea = re.sub(r"(?i)#idea\b", "", m.get("text") or "").strip()
+    if not idea:
+        tg.send(chat, IDEA_HELP, reply_to=mid, markdown=True)
+        return
+    status = tg.send(chat, "✍️ Scrivo il copione…", reply_to=mid)
+    try:
+        from studio import copione  # import pigro: llama-cpp serve solo qui
+        text, risky = copione.generate(idea)
+        tg.edit(chat, status, "✍️ Copione pronto:")
+        tg.send(chat, script_reply(text, risky), reply_to=mid, markdown=True)
+    except Exception as e:  # noqa: BLE001 - qualunque errore va riportato in chat
+        print(f"[studio] errore copione: {e!r}")
+        tg.edit(chat, status, f"❌ Errore nel copione: {str(e)[:300]}")
+
+
 def make_video(tg: Telegram, job: dict, assets: str, whisper_model: str):
     from studio import audio, regia  # import pigro: numpy/Pillow/whisper servono solo qui
 
@@ -297,6 +340,8 @@ def main():
             tg.send(m["chat"]["id"], job["testo"], reply_to=m.get("message_id"), markdown=job.get("markdown", False))
         elif job["tipo"] == "video":
             make_video(tg, job, assets, whisper_model)
+        elif job["tipo"] == "copione":
+            make_script(tg, job)
 
 
 if __name__ == "__main__":
