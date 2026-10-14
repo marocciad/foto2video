@@ -32,6 +32,7 @@ def needed_files(char_dir: str) -> list:
         files.add(cfg["intro"])
     for shots in cfg["inquadrature"].values():
         files.update(s[0] for s in shots)
+    files.update(cfg.get("app", {}).values())  # schermate dell'app per {app}
     missing = [f for f in files if not os.path.exists(os.path.join(char_dir, f))]
     if missing:
         sys.exit(f"{char_dir}: mancano {missing}")

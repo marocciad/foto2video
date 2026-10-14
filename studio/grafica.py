@@ -61,7 +61,10 @@ def plan_graphics(words: list, rules: list, speech_end: float, logo: str = None)
 # --- grafiche scritte nel copione ------------------------------------------------------------
 # {numero: 12.480 | partite analizzate}   {barre: Inter 1,8 - Milan 0,9 | gol attesi}
 # {forma: VVNPV | Inter}                   {rating: 87 | rating Inter}
-MARKUP = re.compile(r"\{\s*(numero|barre|forma|rating)\s*:\s*([^|}]*?)\s*(?:\|\s*([^}]*?)\s*)?\}", re.IGNORECASE)
+# {app} / {app: calendario, analisi | etichetta}   (schermate in personaggio.json, "app")
+MARKUP = re.compile(r"\{\s*(numero|barre|forma|rating|app)\s*(?::\s*([^|}]*?))?\s*(?:\|\s*([^}]*?)\s*)?\}",
+                    re.IGNORECASE)
+DUR_BY_TYPE = {"app": 4.5}  # il telefono con l'app va guardato: resta piu' a lungo
 
 
 def _number(text: str) -> tuple:
@@ -75,7 +78,10 @@ def _number(text: str) -> tuple:
 
 
 def _markup_event(kind: str, body: str, label: str) -> dict:
-    kind, label = kind.lower(), (label or "").strip()
+    kind, body, label = kind.lower(), (body or "").strip(), (label or "").strip()
+    if kind == "app":  # i nomi diventano file in make_video (vuoto = tutte le schermate)
+        return {"tipo": "app", "schermate": [n.strip().lower() for n in body.split(",") if n.strip()],
+                "kicker": label.upper()}
     if kind == "numero":
         val, dec, suffix = _number(body)
         return {"tipo": "contatore", "valore": val, "decimali": dec, "suffisso": suffix,
@@ -141,7 +147,8 @@ def schedule(hits: list, speech_end: float, logo: str = None) -> list:
         if events and ev["t"] < events[-1]["t"] + events[-1]["durata"] - 0.01:  # tolleranza arrotondamenti
             continue  # la precedente e' ancora a schermo
         nxt = hits[i + 1]["t"] if i + 1 < len(hits) else speech_end
-        ev["durata"] = round(min(MAX_DUR, max(nxt, ev["t"]) - ev["t"], speech_end - ev["t"]), 3)
+        limit = DUR_BY_TYPE.get(ev.get("tipo"), MAX_DUR)
+        ev["durata"] = round(min(limit, max(nxt, ev["t"]) - ev["t"], speech_end - ev["t"]), 3)
         if ev["durata"] >= MIN_DUR:
             events.append(ev)
     if logo:
@@ -201,9 +208,26 @@ def available() -> bool:
     return os.environ.get("HYPERFRAMES") == "1"
 
 
+def resolve_app_screens(events: list, screens: dict) -> dict:
+    """Nomi delle schermate -> percorsi relativi nel progetto di rendering. Toglie le grafiche "app"
+    senza schermate disponibili. Ritorna {percorso_relativo: nome} dei file da copiare."""
+    needed = {}
+    for ev in list(events):
+        if ev.get("tipo") != "app":
+            continue
+        names = [n for n in (ev["schermate"] or list(screens)) if n in screens]
+        if not names:
+            events.remove(ev)
+            continue
+        ev["schermate"] = [f"app/{n}.png" for n in names]
+        needed.update({f"app/{n}.png": n for n in names})
+    return needed
+
+
 def render_overlay(events: list, size: tuple, duration: float, out_webm: str, logo_rgba=None,
-                   captions: dict = None):
-    """Rende il modello con sfondo trasparente (HyperFrames -> WebM VP9 con alfa)."""
+                   captions: dict = None, files: dict = None):
+    """Rende il modello con sfondo trasparente (HyperFrames -> WebM VP9 con alfa).
+    `files`: {percorso_relativo: file_sorgente} da copiare accanto al modello (schermate dell'app)."""
     W, H = size
     work = tempfile.mkdtemp(prefix="grafica_")
     try:
@@ -212,6 +236,9 @@ def render_overlay(events: list, size: tuple, duration: float, out_webm: str, lo
             shutil.copy(os.path.join(HERE, "fonts", f), os.path.join(work, "fonts", f))
         if logo_rgba is not None:
             logo_rgba.save(os.path.join(work, "logo.png"))
+        for rel, src in (files or {}).items():
+            os.makedirs(os.path.dirname(os.path.join(work, rel)), exist_ok=True)
+            shutil.copy(src, os.path.join(work, rel))
         html = open(TEMPLATE, encoding="utf-8").read()
         for k, v in {"__W__": str(W), "__H__": str(H), "__DUR__": f"{duration:.3f}",
                      "__CONFIG__": json.dumps({"eventi": events, **(captions or {})}, ensure_ascii=False)}.items():

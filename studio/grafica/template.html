@@ -62,6 +62,18 @@
                 text-shadow: 0 calc(var(--u) * 0.5) calc(var(--u) * 1.2) rgba(0, 0, 0, 0.75); }
       .cap .w.brand { color: var(--gold); }
       .cap .w.pill { padding: 0 0.18em; border-radius: 0.18em; }
+      /* telefono con le schermate dell'app */
+      .phone { position: absolute; left: 50%; opacity: 0; background: #0b0f14;
+               border: calc(var(--u) * 0.9) solid #1f2937; border-radius: calc(var(--u) * 7);
+               box-shadow: 0 0 calc(var(--u) * 6) rgba(34, 197, 94, 0.35), 0 calc(var(--u) * 3) calc(var(--u) * 6) rgba(0, 0, 0, 0.6);
+               transform: translateX(-50%); }
+      .phone .screen { position: absolute; inset: 0; overflow: hidden; border-radius: calc(var(--u) * 6); }
+      .phone .screen img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; }
+      .phone .notch { position: absolute; top: calc(var(--u) * 1.2); left: 50%; width: 30%; height: calc(var(--u) * 2.2);
+                      transform: translateX(-50%); background: #000; border-radius: 99px; }
+      .phone-label { position: absolute; left: 0; right: 0; text-align: center; opacity: 0;
+                     font-size: calc(var(--u) * 4.2); letter-spacing: 0.08em; color: var(--green);
+                     text-shadow: 0 0 calc(var(--u) * 2) rgba(0, 0, 0, 0.9); }
       /* transizioni ai cambi di inquadratura */
       .flash { position: absolute; inset: 0; opacity: 0;
                background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.95) 0%,
@@ -177,6 +189,39 @@
               tl.to(dot, { scale: 1, duration: 0.3, ease: "back.out(2.2)" }, ev.t + 0.25 + i * 0.12);
             });
             inOut(c, ev.t, ev.durata);
+          },
+          app: function (ev) {
+            // proporzioni di uno smartphone (circa 9:19.5); altezza in base al formato del video
+            // telefono e scritta restano sopra la zona dei sottotitoli (70% / 80% dell'altezza)
+            var ph = H > W ? H * 0.50 : (W === H ? H * 0.55 : H * 0.64), pw = ph / 2.17;
+            var top = H > W ? H * 0.07 : (W === H ? H * 0.05 : H * 0.06);
+            var p = el("div", "phone");
+            p.style.width = pw + "px"; p.style.height = ph + "px"; p.style.top = top + "px";
+            var scr = el("div", "screen", p);
+            var imgs = ev.schermate.map(function (src, i) {
+              var im = el("img", "", scr); im.src = src;
+              if (i > 0) im.style.opacity = 0;
+              return im;
+            });
+            el("div", "notch", p);
+            if (ev.kicker) {
+              var lab = el("div", "phone-label", root, ev.kicker);
+              lab.style.top = (top + ph + u * 2) + "px";
+              tl.to(lab, { opacity: 1, duration: 0.3 }, ev.t + 0.3);
+              tl.to(lab, { opacity: 0, duration: 0.25 }, ev.t + ev.durata - 0.3);
+            }
+            tl.fromTo(p, { opacity: 0, y: H * 0.35, rotation: 8 },
+                      { opacity: 1, y: 0, rotation: 0, duration: 0.6, ease: "back.out(1.4)" }, ev.t);
+            tl.to(p, { y: -u * 1.5, duration: ev.durata - 0.9, ease: "sine.inOut" }, ev.t + 0.6);  // galleggia
+            tl.fromTo(imgs, { scale: 1 }, { scale: 1.05, duration: ev.durata, ease: "none" }, ev.t);
+            var step = (ev.durata - 0.9) / imgs.length;
+            imgs.forEach(function (im, i) {      // le schermate scorrono una dopo l'altra
+              if (i === 0) return;
+              var t = ev.t + 0.6 + step * i;
+              tl.fromTo(im, { opacity: 1, x: pw }, { x: 0, duration: 0.35, ease: "power3.out" }, t);
+              tl.to(imgs[i - 1], { x: -pw * 0.3, opacity: 0, duration: 0.35, ease: "power3.out" }, t);
+            });
+            tl.to(p, { opacity: 0, y: -u * 6, duration: 0.3, ease: "power2.in" }, ev.t + ev.durata - 0.3);
           },
           chiusura: function (ev) {
             var o = el("div", "", root); o.id = "outro";

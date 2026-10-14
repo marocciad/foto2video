@@ -318,3 +318,17 @@ def test_overlay_config_cuts_opening_and_captions():
     brand = [w for g in groups for w in g["parole"] if "BETFORGE" in w["testo"]][0]
     assert brand["brand"] and not brand["enfasi"]
     assert grafica.overlay_config(ph, (720, 1280), set(), [], intro=False).get("apertura") is None
+
+
+def test_app_markup_and_screen_resolution():
+    from studio import grafica
+    text, items, errors = grafica.parse_markup("Guarda l'app. {app: calendario, analisi | l'app} Fine. {app}")
+    assert text == "Guarda l'app. Fine." and errors == []
+    assert items[0][1] == {"tipo": "app", "schermate": ["calendario", "analisi"], "kicker": "L'APP"}
+    assert items[1][1]["schermate"] == []  # vuoto = tutte quelle disponibili
+    events = [dict(items[0][1], t=0.0, durata=4.0), dict(items[1][1], t=5.0, durata=3.0),
+              {"tipo": "app", "schermate": ["inesistente"], "t": 9.0, "durata": 2.0}]
+    needed = grafica.resolve_app_screens(events, {"calendario": "/a/cal.png"})
+    assert needed == {"app/calendario.png": "calendario"}
+    assert [e["schermate"] for e in events] == [["app/calendario.png"], ["app/calendario.png"]]
+    assert grafica.schedule([{"tipo": "app", "schermate": [], "t": 1.0}], 20.0)[0]["durata"] == 4.5
