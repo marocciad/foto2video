@@ -342,7 +342,7 @@ def make_video(tg: Telegram, job: dict, assets: str, whisper_model: str):
                                if os.path.exists(os.path.join(assets, rel))}
                     files = {rel: screens[n] for rel, n in grafica.resolve_app_screens(events, screens).items()}
                     grafica.render_overlay(events, r.size, total, overlay, logo, cfg, files)
-                    grafica.composite(base, overlay, out)
+                    grafica.composite(base, overlay, out, look=character.get("look"))
                 except Exception as e:  # noqa: BLE001 - le grafiche non devono mai far perdere il video
                     print(f"[studio] grafiche HyperFrames non riuscite, uso i sottotitoli classici: {e!r}")
                     r.burn_subtitles(base, phrases, out, emphasis)

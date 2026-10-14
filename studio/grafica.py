@@ -284,10 +284,23 @@ def render_overlay(events: list, size: tuple, duration: float, out_webm: str, lo
         shutil.rmtree(work, ignore_errors=True)
 
 
-def composite(video: str, overlay_webm: str, out: str):
-    """Sovrappone la grafica trasparente al video (audio copiato cosi' com'e')."""
+# Look "cinema" (personaggio.json: "look": "cinema"): applicato al video della regia SOTTO le grafiche,
+# cosi' scritte e sottotitoli restano nitidi. Contrasto, ombre fredde e luci dorate, vignettatura, grana fine.
+# Grana FISSA (allf=u): quella che cambia a ogni fotogramma (allf=t) portava il video da 11 a 74 MB,
+# oltre il limite di 50 MB di Telegram.
+LOOKS = {
+    "cinema": ("eq=contrast=1.07:saturation=1.06:gamma=0.97,"
+               "colorbalance=rs=-0.03:gs=0.00:bs=0.04:rh=0.05:gh=0.02:bh=-0.04,"
+               "vignette=angle=PI/4.5,noise=alls=4:allf=u"),
+}
+
+
+def composite(video: str, overlay_webm: str, out: str, look: str = None):
+    """Sovrappone la grafica trasparente al video (audio copiato cosi' com'e'), con il look opzionale."""
+    grade = (LOOKS[look] + ",") if look in LOOKS else ""
     p = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", video, "-c:v", "libvpx-vp9", "-i", overlay_webm,
-                        "-filter_complex", "[0:v][1:v]overlay=0:0:eof_action=pass[v]", "-map", "[v]", "-map", "0:a?",
+                        "-filter_complex", f"[0:v]{grade}null[b];[b][1:v]overlay=0:0:eof_action=pass[v]",
+                        "-map", "[v]", "-map", "0:a?",
                         "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p",
                         "-c:a", "copy", "-movflags", "+faststart", out], capture_output=True, text=True)
     if p.returncode != 0:

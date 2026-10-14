@@ -86,6 +86,8 @@ Tag nel testo: `#verticale`, `#orizzontale` o `#quadrato` (un solo formato), `#n
 
 Se HyperFrames non è disponibile o fallisce, il video esce con i sottotitoli classici.
 
+**Look cinematografico** (opzionale): `"look": "cinema"` in `personaggio.json` aggiunge contrasto, ombre fredde e luci dorate, vignettatura e grana fine al video della regia, sotto le grafiche. La grana è fissa: quella animata faceva superare i 50 MB di Telegram.
+
 ### Menu del bot
 
 ```bash
