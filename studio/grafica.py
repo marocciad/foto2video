@@ -284,6 +284,77 @@ def render_overlay(events: list, size: tuple, duration: float, out_webm: str, lo
         shutil.rmtree(work, ignore_errors=True)
 
 
+# --- carosello per i social ----------------------------------------------------------------
+CAROUSEL_TEMPLATE = os.path.join(HERE, "grafica", "carosello.html")
+CAROUSEL_SIZES = {"4x5": (1080, 1350), "1x1": (1080, 1080)}
+MAX_SLIDES = 10  # limite di Telegram (sendMediaGroup) e di Instagram
+
+
+def parse_carousel(text: str) -> tuple:
+    """Una riga = una slide: (slide, errori). Prima riga copertina, ultima chiusura col logo.
+    Ogni slide puo' avere una grafica (il primo segno {…} della riga). Logica pura (testata)."""
+    slides, errors = [], []
+    for line in (l.strip() for l in text.splitlines()):
+        if not line:
+            continue
+        clean, items, errs = parse_markup(line)
+        errors += errs
+        if clean or items:
+            slides.append({"testo": clean, "grafica": items[0][1] if items else None})
+    if len(slides) > MAX_SLIDES:
+        errors.append(f"troppe slide ({len(slides)}): tengo le prime {MAX_SLIDES - 1} e la chiusura")
+        slides = slides[:MAX_SLIDES - 1] + slides[-1:]
+    return slides, errors
+
+
+def render_carousel(slides: list, size: tuple, out_dir: str, emphasis: set, cover=None, logo_rgba=None,
+                    files: dict = None) -> list:
+    """Rende le slide come PNG (HyperFrames, sequenza a 1 fotogramma al secondo: una slide al secondo).
+    `cover`: immagine del personaggio per la copertina. Ritorna i percorsi dei PNG, in ordine."""
+    W, H = size
+    work = tempfile.mkdtemp(prefix="carosello_")
+    try:
+        os.makedirs(os.path.join(work, "fonts"))
+        for f in FONTS:
+            shutil.copy(os.path.join(HERE, "fonts", f), os.path.join(work, "fonts", f))
+        cfg = {"slide": slides, "enfasi": sorted(emphasis)}
+        if logo_rgba is not None:
+            logo_rgba.save(os.path.join(work, "logo.png"))
+            cfg["logo"] = "logo.png"
+        if cover:
+            shutil.copy(cover, os.path.join(work, "copertina" + os.path.splitext(cover)[1]))
+            cfg["copertina"] = "copertina" + os.path.splitext(cover)[1]
+        for rel, src in (files or {}).items():
+            os.makedirs(os.path.dirname(os.path.join(work, rel)), exist_ok=True)
+            shutil.copy(src, os.path.join(work, rel))
+        html = open(CAROUSEL_TEMPLATE, encoding="utf-8").read()
+        map_libs = ""
+        if any((s.get("grafica") or {}).get("tipo") == "mappa" for s in slides):
+            with open(WORLD, encoding="utf-8") as f:
+                map_libs = MAP_LIBS + "\n<script>window.__WORLD = " + f.read() + ";</script>"
+        html = html.replace("<!--__MAPLIBS__-->", map_libs)
+        for k, v in {"__W__": str(W), "__H__": str(H), "__DUR__": str(len(slides)),
+                     "__CONFIG__": json.dumps(cfg, ensure_ascii=False)}.items():
+            html = html.replace(k, v)
+        with open(os.path.join(work, "index.html"), "w", encoding="utf-8") as f:
+            f.write(html)
+        frames = os.path.join(work, "frames")
+        p = subprocess.run(HYPERFRAMES + ["render", work, "--format", "png-sequence", "--fps", "1", "-o", frames,
+                                          "--quiet"], capture_output=True, text=True, shell=os.name == "nt")
+        pngs = sorted(os.path.join(dp, f) for dp, _, fs in os.walk(frames) for f in fs if f.endswith(".png"))
+        if p.returncode != 0 or len(pngs) < len(slides):
+            raise RuntimeError(f"carosello non riuscito ({len(pngs)} immagini): {(p.stderr or p.stdout)[-600:]}")
+        os.makedirs(out_dir, exist_ok=True)
+        out = []
+        for i, src in enumerate(pngs[:len(slides)]):
+            dst = os.path.join(out_dir, f"slide_{i + 1:02d}.png")
+            shutil.copy(src, dst)
+            out.append(dst)
+        return out
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
 # Look "cinema" (personaggio.json: "look": "cinema"): applicato al video della regia SOTTO le grafiche,
 # cosi' scritte e sottotitoli restano nitidi. Contrasto, ombre fredde e luci dorate, vignettatura, grana fine.
 # Grana FISSA (allf=u): quella che cambia a ogni fotogramma (allf=t) portava il video da 11 a 74 MB,

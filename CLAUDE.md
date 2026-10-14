@@ -51,6 +51,7 @@ dispatcher/dispatch.py ── GitHub Actions cron */10: se kernel non attivo e c
 | `#idea`: copione da Qwen3-4B-Instruct-2507 Q4_K_M (llama-cpp, CPU) | Apache 2.0. Il prompt vieta vincite, quote e scommesse e anche le promesse di certezza; `risky_terms` rigenera fino a 3 volte. Su CPU circa 30–60 s |
 | Overlay HyperFrames (`studio/grafica.py`, versione fissata 0.8.152) sopra la regia numpy | sottotitoli parola per parola, grafiche dal copione (`{numero: …}`), transizioni e apertura. Reso con sfondo trasparente (WebM VP9 con alfa), poi `ffmpeg overlay`. Se fallisce si torna ad ASS (`burn_subtitles`). Niente `filter:` CSS nel modello: costringe alla cattura lenta |
 | Grafiche solo con numeri scritti da Daniele nel copione | dati inventati in una pubblicità di un'app di analisi sarebbero ingannevoli |
+| Caroselli: `carosello.html` reso come `png-sequence` a 1 fps, una slide per secondo (visibile da i-0,5 a i+0,5) | stesso stile e stesse grafiche dei video, nello stato finale. Album Telegram con `sendMediaGroup` (max 10) |
 | Whisper `small` su Actions | con il copione bastano i tempi, e `small` è circa 10 volte più veloce di `medium` |
 | Cache modello come dataset Kaggle (`model_cache/`), rilevata in automatico da `find_local_model()` | evita circa 30 GB di download a sessione |
 

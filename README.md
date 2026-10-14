@@ -88,6 +88,15 @@ Se HyperFrames non è disponibile o fallisce, il video esce con i sottotitoli cl
 
 **Look cinematografico** (opzionale): `"look": "cinema"` in `personaggio.json` aggiunge contrasto, ombre fredde e luci dorate, vignettatura e grana fine al video della regia, sotto le grafiche. La grana è fissa: quella animata faceva superare i 50 MB di Telegram.
 
+### Caroselli per i social
+
+Scrivi `#carosello` e poi una riga per slide:
+- prima riga: copertina con il personaggio;
+- righe centrali: una slide ciascuna, anche con una grafica `{…}`;
+- ultima riga: chiusura con il logo.
+
+Il bot manda le slide come album (massimo 10), in formato 4:5 (1080×1350) oppure 1:1 con `#quadrato`. Le immagini sono rese da HyperFrames (`studio/grafica/carosello.html`), una slide al secondo in una sequenza PNG. Su PC servono circa 10 secondi.
+
 ### Menu del bot
 
 ```bash

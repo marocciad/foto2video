@@ -344,3 +344,44 @@ def test_map_markup():
     assert [p["id"] for p in ev["paesi"]] == ["380", "826", "826"]  # Scozia = Regno Unito
     assert "Atlantide" in errors[0]
     assert grafica.schedule([dict(ev, t=1.0)], 20.0)[0]["durata"] == grafica.DUR_BY_TYPE["mappa"]
+
+
+# --- carosello ---------------------------------------------------------------------
+
+def test_parse_carousel_slides_and_limit():
+    from studio import grafica
+    slides, errors = grafica.parse_carousel(
+        "I 3 numeri\n\nGol attesi {barre: Inter 1,8 - Milan 0,9 | gol attesi}\n{forma: VVX}\nScarica BetForge")
+    assert [s["testo"] for s in slides] == ["I 3 numeri", "Gol attesi", "", "Scarica BetForge"]
+    assert slides[1]["grafica"]["tipo"] == "barre" and slides[0]["grafica"] is None
+    assert slides[2]["grafica"]["sequenza"] == "VV"
+    many, errors = grafica.parse_carousel("\n".join(f"slide {i}" for i in range(14)))
+    assert len(many) == grafica.MAX_SLIDES and many[-1]["testo"] == "slide 13" and errors
+
+
+def test_carousel_job_in_queue():
+    jobs = bot.plan_queue([text(1, NOW - 5, "#carosello\nTitolo\nFine")], {ME}, NOW)
+    assert jobs[0]["tipo"] == "carosello" and jobs[0]["ids"] == [1]
+
+
+def test_send_photos_builds_album(tmp_path, monkeypatch):
+    import json as js
+    paths = []
+    for i in range(3):
+        p = os.path.join(str(tmp_path), f"s{i}.png")
+        Image.new("RGB", (4, 4)).save(p)
+        paths.append(p)
+    sent = {}
+
+    class Resp:
+        def json(self):
+            return {"ok": True, "result": []}
+
+    def fake_post(url, data=None, json=None, files=None, timeout=None):
+        sent.update(url=url, data=data, files=files)
+        return Resp()
+    monkeypatch.setattr(bot.requests, "post", fake_post)
+    bot.Telegram("123:abc").send_photos(7, paths, caption="Pronto", reply_to=5)
+    media = js.loads(sent["data"]["media"])
+    assert sent["url"].endswith("/sendMediaGroup") and len(media) == 3 and set(sent["files"]) == {"p0", "p1", "p2"}
+    assert media[0]["caption"] == "Pronto" and "caption" not in media[1] and media[2]["media"] == "attach://p2"

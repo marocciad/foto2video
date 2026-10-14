@@ -140,7 +140,10 @@ def main():
     tts = any(re.search(r"(?i)#voce\b", (u.get("message") or {}).get("text") or "") for u in updates)
     # media: serve ffmpeg/whisper (vocale o voce sintetica); tts: serve anche kokoro
     llm = any(re.search(r"(?i)#idea\b", (u.get("message") or {}).get("text") or "") for u in updates)
-    set_output(action=action, media=int(tts or any(is_audio(u) for u in updates)), tts=int(tts), llm=int(llm))
+    # il carosello non usa la voce, ma gli servono HyperFrames e gli asset (installati con media=1)
+    carousel = any(re.search(r"(?i)#carosello\b", (u.get("message") or {}).get("text") or "") for u in updates)
+    set_output(action=action, media=int(tts or carousel or any(is_audio(u) for u in updates)), tts=int(tts),
+               llm=int(llm))
 
     if action == "start":
         p = subprocess.run(["kaggle", "kernels", "push", "-p", kernel_dir], capture_output=True, text=True)

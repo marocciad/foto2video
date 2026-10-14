@@ -14,6 +14,7 @@ Le foto non si toccano: restano in coda per il worker su Kaggle.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -38,7 +39,8 @@ HELP = ("🎬 *Studio BetForge*\n\n"
         "*Opzioni* (tocca per copiare, poi incolla in fondo al testo):\n"
         "`#verticale` · `#orizzontale` · `#quadrato` · `#voce` · `#nointro`\n\n"
         "*Numeri animati*: scrivi `{numero: 12.480 | partite}` nel testo (vedi /grafiche).\n\n"
-        "Altri comandi: /formati · /voce · /idea · /grafiche · /id\n"
+        "*Carosello*: `#carosello` e una riga per slide (vedi /carosello).\n\n"
+        "Altri comandi: /formati · /voce · /idea · /grafiche · /carosello · /id\n"
         "Le *foto* con didascalia vanno ancora al generatore IA su GPU.")
 FORMATS_HELP = ("📐 *Formati*\n\n"
                 "Senza tag ricevi tutti e tre. Con un tag ne ricevi uno solo:\n"
@@ -65,12 +67,21 @@ GRAPHICS_HELP = ("📊 *Grafiche nel copione*\n\n"
                  "`{rating: 87 | rating Inter}`\n\n"
                  "Esempio: `Migliaia di partite analizzate. {numero: 12.480 | partite}`\n"
                  "⚠️ Usa solo numeri veri.")
+CAROUSEL_HELP = ("🖼️ *Carosello per i social*\n\n"
+                 "Scrivi `#carosello` e poi *una riga per slide*:\n"
+                 "• prima riga: copertina con il personaggio\n"
+                 "• righe centrali: una slide ciascuna, anche con una grafica `{…}` (vedi /grafiche)\n"
+                 "• ultima riga: chiusura con il logo\n\n"
+                 "`#carosello`\n`I 3 numeri che contano`\n`Gol attesi {barre: Inter 1,8 - Milan 0,9 | gol attesi}`\n"
+                 "`Scarica BetForge`\n\n"
+                 "Formato 4:5 (Instagram); aggiungi `#quadrato` per 1:1. Massimo 10 slide.")
 # Menu dei comandi (pulsante "Menu" accanto alla tastiera): lo registra setup/bot_menu.py
 COMMANDS = [("help", "Come si usa"), ("formati", "Formati e tag"),
             ("voce", "Video senza registrare (voce sintetica)"), ("idea", "Fatti proporre un copione"),
-            ("grafiche", "Numeri e grafici animati nel video"), ("id", "Il tuo ID Telegram")]
+            ("grafiche", "Numeri e grafici animati nel video"), ("carosello", "Immagini a scorrimento per i social"),
+            ("id", "Il tuo ID Telegram")]
 COMMAND_TEXTS = {"start": HELP, "help": HELP, "aiuto": HELP, "formati": FORMATS_HELP, "voce": VOICE_HELP,
-                 "idea": IDEA_HELP, "grafiche": GRAPHICS_HELP}
+                 "idea": IDEA_HELP, "grafiche": GRAPHICS_HELP, "carosello": CAROUSEL_HELP}
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +96,8 @@ def kind(msg: dict) -> str:
     text = (msg.get("text") or "").strip()
     if text.startswith("/"):
         return "command"
+    if re.search(r"(?i)#carosello\b", text):
+        return "carousel"  # una riga per slide: immagini per i social, niente video
     if re.search(r"(?i)#idea\b", text):
         return "idea"  # richiesta di un copione: si risponde con il testo, niente video
     if re.search(r"(?i)#voce\b", text):
@@ -136,6 +149,8 @@ def plan_queue(updates: list, allowed: set, now: float) -> list:
             jobs.append({"tipo": "video", "voce": None, "copione": m, "ids": [uid]})
         elif k == "idea":
             jobs.append({"tipo": "copione", "msg": m, "ids": [uid]})
+        elif k == "carousel":
+            jobs.append({"tipo": "carosello", "msg": m, "ids": [uid]})
         elif k == "text":
             if now - m.get("date", now) < WAIT_TEXT:
                 break  # copione in attesa del suo vocale
@@ -223,6 +238,22 @@ class Telegram:
             return self.call("sendVideo", http_timeout=300, files={"video": ("video.mp4", f, "video/mp4")},
                              **params)
 
+    def send_photos(self, chat_id, paths, caption="", reply_to=None):
+        """Album di immagini (max 10): le slide del carosello arrivano in un unico messaggio."""
+        media = [{"type": "photo", "media": f"attach://p{i}"} for i in range(len(paths))]
+        if caption:
+            media[0]["caption"] = caption[:1024]
+        params = {"chat_id": chat_id, "media": json.dumps(media)}
+        if reply_to:
+            params.update(reply_to_message_id=reply_to, allow_sending_without_reply="true")
+        handles = [open(p, "rb") for p in paths]
+        try:
+            files = {f"p{i}": (os.path.basename(p), h, "image/png") for i, (p, h) in enumerate(zip(paths, handles))}
+            return self.call("sendMediaGroup", http_timeout=300, files=files, **params)
+        finally:
+            for h in handles:
+                h.close()
+
 
 # ---------------------------------------------------------------------------
 # Lavorazione
@@ -257,6 +288,50 @@ def make_script(tg: Telegram, job: dict):
     except Exception as e:  # noqa: BLE001 - qualunque errore va riportato in chat
         print(f"[studio] errore copione: {e!r}")
         tg.edit(chat, status, f"❌ Errore nel copione: {str(e)[:300]}")
+
+
+def make_carousel(tg: Telegram, job: dict, assets: str):
+    from studio import grafica, regia  # import pigro
+
+    m = job["msg"]
+    chat, mid = m["chat"]["id"], m["message_id"]
+    tags = {t.lower() for t in re.findall(r"#(\w+)", m.get("text") or "")}
+    text = re.sub(r"#\w+", "", m.get("text") or "")
+    slides, errors = grafica.parse_carousel(text)
+    if not slides:
+        tg.send(chat, CAROUSEL_HELP, reply_to=mid, markdown=True)
+        return
+    if not grafica.available():
+        tg.send(chat, "❌ I caroselli richiedono HyperFrames, che qui non è installato.", reply_to=mid)
+        return
+    status = tg.send(chat, f"🖼️ Preparo il carosello ({len(slides)} slide)…", reply_to=mid)
+    if errors:
+        tg.send(chat, "⚠️ Grafiche saltate:\n" + "\n".join(errors), reply_to=mid)
+    work = tempfile.mkdtemp(prefix="carosello_")
+    try:
+        character = regia.load_character(assets)
+        screens = {n: os.path.join(assets, rel) for n, rel in character.get("app", {}).items()
+                   if os.path.exists(os.path.join(assets, rel))}
+        graphics = [s["grafica"] for s in slides if s["grafica"]]
+        files = {rel: screens[n] for rel, n in grafica.resolve_app_screens(graphics, screens).items()}
+        for s in slides:  # grafiche "app" senza schermate disponibili: tolte da resolve_app_screens
+            if s["grafica"] is not None and s["grafica"] not in graphics:
+                s["grafica"] = None
+        logo_path = os.path.join(assets, character.get("logo", "logo.png"))
+        cover_name = character.get("copertina_carosello") or character["inquadrature"]["16x9"][2][0]
+        size = grafica.CAROUSEL_SIZES["1x1" if "quadrato" in tags else "4x5"]
+        pngs = grafica.render_carousel(
+            slides, size, os.path.join(work, "slide"), {w.lower() for w in character.get("enfasi", [])},
+            cover=os.path.join(assets, cover_name),
+            logo_rgba=regia._load_logo(logo_path) if os.path.exists(logo_path) else None, files=files)
+        tg.send_photos(chat, pngs, caption="🖼️ Carosello pronto: salva le immagini e pubblicale in ordine.",
+                       reply_to=mid)
+        tg.edit(chat, status, f"✅ Carosello di {len(pngs)} slide")
+    except Exception as e:  # noqa: BLE001 - qualunque errore va riportato in chat
+        print(f"[studio] errore carosello: {e!r}")
+        tg.edit(chat, status, f"❌ Errore nel carosello: {str(e)[:300]}")
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 
 def make_video(tg: Telegram, job: dict, assets: str, whisper_model: str):
@@ -382,6 +457,8 @@ def main():
             make_video(tg, job, assets, whisper_model)
         elif job["tipo"] == "copione":
             make_script(tg, job)
+        elif job["tipo"] == "carosello":
+            make_carousel(tg, job, assets)
 
 
 if __name__ == "__main__":
