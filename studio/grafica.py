@@ -62,9 +62,27 @@ def plan_graphics(words: list, rules: list, speech_end: float, logo: str = None)
 # {numero: 12.480 | partite analizzate}   {barre: Inter 1,8 - Milan 0,9 | gol attesi}
 # {forma: VVNPV | Inter}                   {rating: 87 | rating Inter}
 # {app} / {app: calendario, analisi | etichetta}   (schermate in personaggio.json, "app")
-MARKUP = re.compile(r"\{\s*(numero|barre|forma|rating|app)\s*(?::\s*([^|}]*?))?\s*(?:\|\s*([^}]*?)\s*)?\}",
+# {mappa: Italia, Inghilterra, Spagna | campionati analizzati}
+MARKUP = re.compile(r"\{\s*(numero|barre|forma|rating|app|mappa)\s*(?::\s*([^|}]*?))?\s*(?:\|\s*([^}]*?)\s*)?\}",
                     re.IGNORECASE)
-DUR_BY_TYPE = {"app": 4.5}  # il telefono con l'app va guardato: resta piu' a lungo
+DUR_BY_TYPE = {"app": 4.5, "mappa": 3.6}  # da guardare con calma: restano piu' a lungo
+
+# Nomi italiani -> codice ISO 3166-1 numerico dei confini world-atlas (Natural Earth).
+# Inghilterra, Scozia e Galles non sono Stati: si illumina il Regno Unito.
+COUNTRIES = {
+    "italia": "380", "inghilterra": "826", "scozia": "826", "galles": "826", "regno unito": "826",
+    "spagna": "724", "germania": "276", "francia": "250", "portogallo": "620", "olanda": "528",
+    "paesi bassi": "528", "belgio": "056", "turchia": "792", "grecia": "300", "danimarca": "208",
+    "svezia": "752", "norvegia": "578", "svizzera": "756", "austria": "040", "polonia": "616",
+    "croazia": "191", "serbia": "688", "repubblica ceca": "203", "cechia": "203", "ucraina": "804",
+    "romania": "642", "irlanda": "372", "finlandia": "246", "russia": "643", "brasile": "076",
+    "argentina": "032", "stati uniti": "840", "usa": "840", "messico": "484", "giappone": "392",
+    "arabia saudita": "682", "cina": "156", "australia": "036", "corea del sud": "410",
+    "egitto": "818", "marocco": "504",
+}
+WORLD = os.path.join(HERE, "grafica", "world-50m.json")
+MAP_LIBS = ('<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>\n'
+            '<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>')
 
 
 def _number(text: str) -> tuple:
@@ -82,6 +100,13 @@ def _markup_event(kind: str, body: str, label: str) -> dict:
     if kind == "app":  # i nomi diventano file in make_video (vuoto = tutte le schermate)
         return {"tipo": "app", "schermate": [n.strip().lower() for n in body.split(",") if n.strip()],
                 "kicker": label.upper()}
+    if kind == "mappa":
+        names = [n.strip() for n in body.split(",") if n.strip()]
+        unknown = [n for n in names if n.lower() not in COUNTRIES]
+        if not names or unknown:
+            raise ValueError(f"paesi non riconosciuti: {', '.join(unknown) or 'nessuno'}")
+        return {"tipo": "mappa", "kicker": label.upper(),
+                "paesi": [{"nome": n.upper(), "id": COUNTRIES[n.lower()]} for n in names[:8]]}
     if kind == "numero":
         val, dec, suffix = _number(body)
         return {"tipo": "contatore", "valore": val, "decimali": dec, "suffisso": suffix,
@@ -240,6 +265,12 @@ def render_overlay(events: list, size: tuple, duration: float, out_webm: str, lo
             os.makedirs(os.path.dirname(os.path.join(work, rel)), exist_ok=True)
             shutil.copy(src, os.path.join(work, rel))
         html = open(TEMPLATE, encoding="utf-8").read()
+        # mappa: librerie e confini inseriti nella pagina solo se servono (niente rete in rendering)
+        map_libs = ""
+        if any(e.get("tipo") == "mappa" for e in events):
+            with open(WORLD, encoding="utf-8") as f:
+                map_libs = MAP_LIBS + "\n<script>window.__WORLD = " + f.read() + ";</script>"
+        html = html.replace("<!--__MAPLIBS__-->", map_libs)
         for k, v in {"__W__": str(W), "__H__": str(H), "__DUR__": f"{duration:.3f}",
                      "__CONFIG__": json.dumps({"eventi": events, **(captions or {})}, ensure_ascii=False)}.items():
             html = html.replace(k, v)

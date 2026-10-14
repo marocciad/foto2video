@@ -332,3 +332,15 @@ def test_app_markup_and_screen_resolution():
     assert needed == {"app/calendario.png": "calendario"}
     assert [e["schermate"] for e in events] == [["app/calendario.png"], ["app/calendario.png"]]
     assert grafica.schedule([{"tipo": "app", "schermate": [], "t": 1.0}], 20.0)[0]["durata"] == 4.5
+
+
+def test_map_markup():
+    from studio import grafica
+    text, items, errors = grafica.parse_markup(
+        "Campionati. {mappa: Italia, Inghilterra, Scozia | campionati analizzati} E poi {mappa: Atlantide}")
+    assert text == "Campionati. E poi" and len(items) == 1
+    ev = items[0][1]
+    assert ev["kicker"] == "CAMPIONATI ANALIZZATI"
+    assert [p["id"] for p in ev["paesi"]] == ["380", "826", "826"]  # Scozia = Regno Unito
+    assert "Atlantide" in errors[0]
+    assert grafica.schedule([dict(ev, t=1.0)], 20.0)[0]["durata"] == grafica.DUR_BY_TYPE["mappa"]

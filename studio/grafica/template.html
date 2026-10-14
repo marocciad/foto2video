@@ -7,6 +7,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=__W__, height=__H__" />
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <!--__MAPLIBS__-->
     <style>
       @font-face { font-family: "Anton"; src: url("fonts/Anton-Regular.ttf"); }
       @font-face { font-family: "Bebas Neue"; src: url("fonts/BebasNeue-Regular.ttf"); }
@@ -74,6 +75,15 @@
       .phone-label { position: absolute; left: 0; right: 0; text-align: center; opacity: 0;
                      font-size: calc(var(--u) * 4.2); letter-spacing: 0.08em; color: var(--green);
                      text-shadow: 0 0 calc(var(--u) * 2) rgba(0, 0, 0, 0.9); }
+      /* mappa dei campionati */
+      .map { position: absolute; opacity: 0; }
+      .map .country { fill: #1a222d; stroke: #2b3644; stroke-width: 0.6; }
+      .map .country.on { stroke: #bbf7d0; stroke-width: 1.2; }
+      .map text { font-family: "Bebas Neue", sans-serif; fill: #f5f5f7; paint-order: stroke;
+                  stroke: #080b10; stroke-width: 4px; text-anchor: middle; }
+      .map-kicker { position: absolute; left: 0; right: 0; text-align: center; opacity: 0;
+                    font-size: calc(var(--u) * 4.4); letter-spacing: 0.08em; color: var(--green);
+                    text-shadow: 0 0 calc(var(--u) * 2) rgba(0, 0, 0, 0.9); }
       /* transizioni ai cambi di inquadratura */
       .flash { position: absolute; inset: 0; opacity: 0;
                background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.95) 0%,
@@ -222,6 +232,75 @@
               tl.to(imgs[i - 1], { x: -pw * 0.3, opacity: 0, duration: 0.35, ease: "power3.out" }, t);
             });
             tl.to(p, { opacity: 0, y: -u * 6, duration: 0.3, ease: "power2.in" }, ev.t + ev.durata - 0.3);
+          },
+          mappa: function (ev) {
+            if (!window.__WORLD || !window.d3 || !window.topojson) return;  // librerie mancanti: niente mappa
+            var bx = W * 0.04, bw = W * 0.92, by = H > W ? H * 0.09 : H * 0.10;
+            var bh = H > W ? H * 0.46 : (W === H ? H * 0.52 : H * 0.62);
+            if (W > H) { bw = W * 0.6; bx = (W - bw) / 2; }
+            var all = topojson.feature(window.__WORLD, window.__WORLD.objects.countries).features;
+            var ids = ev.paesi.map(function (p) { return p.id; });
+            var chosen = all.filter(function (f) { return ids.indexOf(String(f.id).padStart(3, "0")) >= 0; });
+            // inquadratura sui paesi scelti, con margine; Mercatore per un'Europa riconoscibile.
+            // Si inquadra solo la parte principale di ogni paese: la Guyana francese o le isole
+            // lontane allargherebbero la vista al mondo intero.
+            function mainland(f) {
+              if (f.geometry.type !== "MultiPolygon") return f;
+              var best = null, area = -1;
+              f.geometry.coordinates.forEach(function (poly) {
+                var g = { type: "Polygon", coordinates: poly }, a = d3.geoArea(g);
+                if (a > area) { area = a; best = g; }
+              });
+              return { type: "Feature", geometry: best };
+            }
+            var proj = d3.geoMercator().fitExtent([[bw * 0.12, bh * 0.12], [bw * 0.88, bh * 0.9]],
+                                                  { type: "FeatureCollection", features: chosen.map(mainland) });
+            var path = d3.geoPath(proj);
+            var NS = "http://www.w3.org/2000/svg";
+            var svg = document.createElementNS(NS, "svg");
+            svg.setAttribute("width", bw); svg.setAttribute("height", bh); svg.setAttribute("class", "map");
+            svg.style.left = bx + "px"; svg.style.top = by + "px";
+            root.appendChild(svg);
+            var bg = document.createElementNS(NS, "rect");  // fondo scuro: il personaggio non si vede attraverso
+            bg.setAttribute("width", bw); bg.setAttribute("height", bh); bg.setAttribute("rx", u * 2.5);
+            bg.setAttribute("fill", "rgba(8,11,16,0.86)"); bg.setAttribute("stroke", "rgba(34,197,94,0.45)");
+            svg.appendChild(bg);
+            var byId = {};
+            all.forEach(function (f) {
+              var d = path(f);
+              if (!d) return;
+              var p = document.createElementNS(NS, "path");
+              p.setAttribute("d", d); p.setAttribute("class", "country");
+              svg.appendChild(p);
+              byId[String(f.id).padStart(3, "0")] = { el: p, f: f };
+            });
+            if (ev.kicker) {
+              var k = el("div", "map-kicker", root, ev.kicker);
+              k.style.top = (by - u * 1) + "px";
+              tl.to(k, { opacity: 1, duration: 0.3 }, ev.t + 0.2);
+              tl.to(k, { opacity: 0, duration: 0.25 }, ev.t + ev.durata - 0.3);
+            }
+            tl.fromTo(svg, { opacity: 0, scale: 1.08 }, { opacity: 1, scale: 1, duration: 0.5, ease: "power2.out" }, ev.t);
+            var count = {};  // Inghilterra e Scozia accendono lo stesso Regno Unito: etichette impilate
+            ev.paesi.forEach(function (p, i) {
+              var c = byId[p.id];
+              if (!c) return;
+              var t = ev.t + 0.45 + i * Math.min(0.3, (ev.durata - 1.2) / ev.paesi.length);
+              var n = count[p.id] || 0;
+              count[p.id] = n + 1;
+              if (n === 0) {
+                tl.set(c.el, { attr: { "class": "country on" } }, t);
+                tl.fromTo(c.el, { fill: "#1a222d" }, { fill: "#22c55e", duration: 0.35, ease: "power2.out" }, t);
+              }
+              var xy = proj(d3.geoCentroid(mainland(c.f)));  // etichetta sulla parte principale
+              var lab = document.createElementNS(NS, "text");
+              lab.textContent = p.nome;
+              lab.setAttribute("x", xy[0]); lab.setAttribute("y", xy[1] + n * u * 3.6);
+              lab.setAttribute("font-size", u * 3.4); lab.setAttribute("opacity", 0);
+              svg.appendChild(lab);
+              tl.fromTo(lab, { attr: { opacity: 0 } }, { attr: { opacity: 1 }, duration: 0.25 }, t + 0.1);
+            });
+            tl.to(svg, { opacity: 0, duration: 0.3, ease: "power2.in" }, ev.t + ev.durata - 0.3);
           },
           chiusura: function (ev) {
             var o = el("div", "", root); o.id = "outro";
