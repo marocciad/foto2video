@@ -78,8 +78,8 @@ kaggle kernels output <user>/foto2video-worker -p out/          # log dell'ultim
 - ⚠️ Lezione: un YAML non valido nel workflow blocca **tutti** gli avvii, anche quelli di cron-job.org. Validare sempre `dispatch.yml` prima del push (`yaml.safe_load`); occhio a `: ` nei comandi `run:`.
 - ❌ **Mani animate con Wan: scartate da Daniele** (2026-10-14). Prototipo in `prototipi/mani/`: loop di Wan su un ritaglio, incollato solo sulla zona delle mani. Tecnicamente funziona (circa 10 min di GPU a loop, una volta sola), ma il risultato non lo soddisfa. Non riproporlo.
 - ✅ **Overlay HyperFrames collaudato su Actions** (2026-10-14): sottotitoli parola per parola, grafiche dal copione, transizioni, apertura e chiusura nei 3 formati. Installazione di Node e HyperFrames con il browser in cache: 10 s. Montaggio con overlay circa 8 min per i 3 formati (491 s nel collaudo). Se servisse più velocità: overlay a 24 fps.
-- ✅ **Look cinema attivo** (`"look": "cinema"` in personaggio.json, 2026-10-15). Schermate dell'app per `{app}`: `calendario`, `analista` e `analisi`. Nelle ultime due il "Consiglio" (Segno 1), la scheda QUOTE e i "Dropping odds" sono coperti con vetro smerigliato. Non usare schermate che mostrano quote o consigli di giocata.
-- ⏳ Da fare: logo ad alta risoluzione (in `Betforge/public/assets/logo.jpg` c'è una versione 1024 px con lo slogan da togliere).
+- ✅ **Look cinema attivo** (`"look": "cinema"` in personaggio.json, 2026-10-15). Schermate dell'app per `{app}`: `calendario`, `analista` e `analisi`. Nelle ultime due sono coperti con vetro smerigliato il "Consiglio" (Segno 1), le percentuali 1X2, i mercati Over/GG, la scheda QUOTE e i "Dropping odds": resta solo analisi pura (calendario, squadre, assenze, xG). Non usare schermate che mostrano quote o consigli di giocata.
+- ✅ **Logo HD** (2026-10-15): `personaggi/betforge/logo.png` ora deriva da `Betforge/public/assets/logo.jpg` (1024 px) senza "Predict Forge Win" (righe dalla 575 in giù riempite con lo sfondo `#040404`; la coda della g finisce alla riga 570).
 - Wan su Kaggle: funziona (2 GPU, fp16), ma fa sorridere la maschera e deforma l'armatura. Corretti `torchao` vecchio e il fallback in caso di errore di caricamento.
 - Rischi da verificare al collaudo: qualità in FP8 storage (disattivabile con `WAN_FP8=false`), UMT5 in fp16 (possibili NaN → `WAN_DTYPE=bf16`), output nero in fp16 (→ `WAN_DTYPE=bf16`), OOM (→ `WAN_MAX_AREA` più basso), `from_pretrained(text_encoder=None, tokenizer=None)` sul ramo a 2 GPU, valore di `machine_shape` accettato dalla CLI, tempo reale per clip.
 
@@ -111,7 +111,7 @@ Implementata in `studio/` (prototipi originali in `prototipi/`). Il formato appr
 - voce 3 (rubberband 0.80 + eco corta, ~-14.7 LUFS), testo dei sottotitoli dal **copione** allineato ai tempi di whisper;
 - uno stacco di inquadratura per frase tra le 4 immagini del personaggio, bagliore verde tenue guidato dalla voce;
 - sottotitoli cinetici: 5 font OFL a rotazione, parole chiave più grandi, "BetForge" in oro, parola detta in verde con un "pop";
-- chiusura di circa 2,8 s con il logo (da `Betforge/public/icons/icon-512x512.png`, a bassa risoluzione: chiedere a Daniele un SVG o un PNG grande).
+- chiusura di circa 2,8 s con il logo (HD, da `Betforge/public/assets/logo.jpg`, senza slogan).
 - Wan non serve per questo formato: tutto CPU.
 
 ## Roadmap (in ordine di valore)
